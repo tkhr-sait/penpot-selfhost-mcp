@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "penpot-official": {
+      "url": "http://localhost:4411/mcp",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}

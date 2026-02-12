@@ -1,0 +1,81 @@
+// https://containers.dev/implementors/json_reference/
+// https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user
+// https://code.visualstudio.com/remote/advancedcontainers/develop-remote-host
+// Linuxでは updateRemoteUserUID によりコンテナユーザーのUIDがホストUIDに自動リマップされる
+// macOSでは updateRemoteUserUID は無視され、Dockerfileで指定したUID(501)がそのまま使用される
+{
+  "name": "penpot-selfhost-mcp",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "Asia/Tokyo"
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest"
+    },
+    "python": {
+      "version": "3.12.3"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+          },
+          "zsh": {
+            "path": "zsh"
+          }
+        }
+      }
+    }
+  },
+  "remoteUser": "devuser",
+  "updateRemoteUserUID": true,
+  "mounts": [
+    "source=claude-code-bashhistory,target=/commandhistory,type=volume",
+    "source=claude-code-config,target=/home/devuser/.claude,type=volume"
+  ],
+  "remoteEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR": "/home/devuser/.claude",
+    "DO_NOT_TRACK": "true"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [9001, 4400, 4401, 4402],
+  "portsAttributes": {
+    "9001": {
+      "label": "penpot",
+      "requireLocalPort": true
+    },
+    "4400": {
+      "label": "penpot-mcp-plugin",
+      "requireLocalPort": true
+    },
+    "4401": {
+      "label": "penpot-mcp-http",
+      "requireLocalPort": true
+    },
+    "4402": {
+      "label": "penpot-mcp-ws",
+      "requireLocalPort": true
+    },
+    "8080": {
+      "onAutoForward": "ignore"
+    }
+  },
+  // Fix named volume ownership for devuser
+  "postCreateCommand": "bash /workspace/.devcontainer/post-create.sh"
+}
