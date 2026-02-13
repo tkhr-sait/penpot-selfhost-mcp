@@ -4,6 +4,8 @@
 ##   cp .env.example .env   # Edit with your settings
 ##   docker compose up -d
 
+name: penpot
+
 x-flags: &penpot-flags
   PENPOT_FLAGS: >-
     enable-registration
@@ -172,7 +174,7 @@ services:
     networks:
       - penpot
 
-  # MCP Auto-Connect - Claude Code
+  # MCP Auto-Connect + Bridge Server - Claude Code
   penpot-mcp-connect-claude:
     build:
       context: ./mcp-connect
@@ -190,7 +192,7 @@ services:
     networks:
       - penpot
 
-  # MCP Auto-Connect - GitHub Copilot
+  # MCP Auto-Connect + Bridge Server - GitHub Copilot
   penpot-mcp-connect-copilot:
     build:
       context: ./mcp-connect

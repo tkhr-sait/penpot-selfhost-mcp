@@ -4,6 +4,7 @@
  *
  * Automates: login → ensure workspace file → install plugin → connect MCP → keep alive
  *
+ *
  * Environment variables:
  *   PENPOT_PUBLIC_URI          (default: http://localhost:9001)
  *   PENPOT_MCP_EMAIL           (default: mcp@penpot.local)  — MCP dedicated user
@@ -41,6 +42,7 @@
  */
 
 import { chromium } from "playwright";
+import http from "node:http";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -97,6 +99,28 @@ async function waitForService(url, label, timeout = SERVICE_POLL_TIMEOUT) {
   throw new Error(`Timeout waiting for ${label} at ${url}`);
 }
 
+/**
+ * Apply SES (Secure EcmaScript) workaround to prevent transit-js breakage.
+ * Playwright's Chromium triggers SES lockdown in plugin iframes, which freezes
+ * Object via the sandbox's allow-same-origin. This wraps Object.defineProperty
+ * to swallow "not extensible" errors on frozen objects.
+ */
+async function applySesWorkaround(targetPage) {
+  await targetPage.evaluate(() => {
+    const origDefineProperty = Object.defineProperty;
+    Object.defineProperty = function(obj, prop, desc) {
+      try {
+        return origDefineProperty.call(this, obj, prop, desc);
+      } catch (e) {
+        if (e instanceof TypeError && e.message.includes("not extensible")) {
+          return obj;
+        }
+        throw e;
+      }
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -133,7 +157,10 @@ async function main() {
     // 5. Install & connect plugin
     await installAndConnectPlugin(page);
 
-    // 6. Keep alive — block until browser disconnects or Ctrl+C
+    // 6. Start bridge server (REST API proxy + file navigation)
+    startBridgeServer(page);
+
+    // 7. Keep alive — block until browser disconnects or Ctrl+C
     log("MCP connected. Browser will stay open. Press Ctrl+C to exit.");
     await keepAlive(browser);
   } catch (err) {
@@ -221,7 +248,9 @@ async function apiCall(context, method, path, body) {
   if (!res.ok) {
     throw new Error(`API ${method} ${path} => ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text) return null; // 空レスポンス対応（delete-file 等）
+  return JSON.parse(text);
 }
 
 /**
@@ -267,7 +296,10 @@ async function ensureWorkspaceFile(context) {
     `/api/rpc/command/get-project-files?project-id=${projectId}`
   );
 
-  let file = files[0];
+  // Prefer "MCP Workspace" file; skip shared library files
+  let file = files.find((f) => f.name === "MCP Workspace")
+    || files.find((f) => !f.isShared && !f["is-shared"])
+    || files[0];
   if (!file) {
     // Create file
     file = await apiCall(context, "POST", "/api/rpc/command/create-file", {
@@ -378,23 +410,8 @@ async function installPlugin(page, modal) {
 async function openMcpPlugin(page, modal) {
   log("Opening MCP plugin ...");
 
-  // Workaround: Playwright の Chromium で SES lockdown が transit-js を壊す問題
-  // プラグイン iframe 内の SES lockdown が allow-same-origin 経由で親フレームの
-  // Object を凍結し、transit-js の Object.defineProperty が失敗する。
-  // defineProperty を、凍結済みオブジェクトへの定義で例外を飲むようラップする。
-  await page.evaluate(() => {
-    const origDefineProperty = Object.defineProperty;
-    Object.defineProperty = function(obj, prop, desc) {
-      try {
-        return origDefineProperty.call(this, obj, prop, desc);
-      } catch (e) {
-        if (e instanceof TypeError && e.message.includes("not extensible")) {
-          return obj;
-        }
-        throw e;
-      }
-    };
-  });
+  // Apply SES workaround before opening the plugin
+  await applySesWorkaround(page);
 
   // Find the Open/Launch button for the MCP plugin in the plugin list
   // Strategy 1: Look for an "Open" button near MCP text within the modal
@@ -485,6 +502,195 @@ async function verifyConnection(page) {
   }
 
   log("Warning: Could not verify connection status, but connection may be active.");
+}
+
+// ---------------------------------------------------------------------------
+// HTTP Bridge Server (REST API proxy + file navigation for execute_code)
+// ---------------------------------------------------------------------------
+let navigationStatus = "ready";
+
+/**
+ * Reconnect the MCP plugin after navigating to a different file.
+ * Reuses existing openMcpPlugin / connectMcpInIframe / verifyConnection.
+ */
+async function reconnectPlugin(page) {
+  navigationStatus = "reconnecting";
+  log("[nav] Reconnecting MCP plugin ...");
+  try {
+    // Open Plugin Manager
+    const pluginManagerModal = page.locator('[class*="plugin-management"]');
+
+    await page.keyboard.press("Control+Alt+KeyP");
+    await sleep(1000);
+    await pluginManagerModal.waitFor({ state: "visible", timeout: PLUGIN_ACTION_TIMEOUT });
+
+    // Open the MCP plugin (applies SES workaround + clicks Open)
+    await openMcpPlugin(page, pluginManagerModal);
+
+    // Connect in iframe
+    await connectMcpInIframe(page);
+
+    // Verify
+    await verifyConnection(page);
+
+    navigationStatus = "ready";
+    log("[nav] MCP reconnected successfully.");
+  } catch (err) {
+    navigationStatus = "error";
+    log(`[nav] Reconnect failed: ${err.message}`);
+  }
+}
+
+/**
+ * Start the bridge HTTP server on port 3000.
+ *
+ * This server bridges the plugin iframe (execute_code context) with the
+ * browser session managed by Playwright, providing:
+ *   - REST API proxy with browser cookie authentication
+ *   - File navigation (Playwright-driven) with automatic plugin reconnection
+ *
+ * Endpoints:
+ *   POST /api-proxy   { command, params }     → Proxy POST to Penpot REST API (browser cookie auth)
+ *   GET  /api-proxy?command=...&key=val       → Proxy GET to Penpot REST API (browser cookie auth)
+ *   POST /navigate    { projectId, fileId }   → Playwright navigation + plugin reconnect
+ *   GET  /status      → { status: 'ready' | 'navigating' | 'reconnecting' | 'error' }
+ */
+function startBridgeServer(page) {
+  const server = http.createServer(async (req, res) => {
+    // CORS headers (requests come from plugin iframe origin)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    // GET /status
+    if (req.method === "GET" && req.url === "/status") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: navigationStatus }));
+      return;
+    }
+
+    // POST /api-proxy — Proxy REST API calls using browser session cookies
+    if (req.method === "POST" && req.url === "/api-proxy") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const { command, params = {} } = JSON.parse(body);
+          if (!command) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "command is required" }));
+            return;
+          }
+          try {
+            const result = await apiCall(page.context(), "POST", `/api/rpc/command/${command}`, params);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            log(`[api-proxy] ${command} failed: ${err.message}`);
+            res.writeHead(502, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Invalid JSON body" }));
+        }
+      });
+      return;
+    }
+
+    // GET /api-proxy?command=...&param1=...&param2=... — GET variant for read-only API calls
+    if (req.method === "GET" && req.url.startsWith("/api-proxy?")) {
+      try {
+        const url = new URL(req.url, "http://localhost");
+        const command = url.searchParams.get("command");
+        if (!command) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "command query parameter is required" }));
+          return;
+        }
+        // Build params from remaining query parameters
+        const params = {};
+        for (const [key, value] of url.searchParams) {
+          if (key !== "command") params[key] = value;
+        }
+        try {
+          const result = await apiCall(page.context(), "GET", `/api/rpc/command/${command}?${url.searchParams.toString()}`);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (err) {
+          log(`[api-proxy GET] ${command} failed: ${err.message}`);
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid query parameters" }));
+      }
+      return;
+    }
+
+    // POST /navigate
+    if (req.method === "POST" && req.url === "/navigate") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const { projectId, fileId } = JSON.parse(body);
+          if (!projectId || !fileId) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "projectId and fileId are required" }));
+            return;
+          }
+
+          // Return immediately so execute_code context is preserved
+          navigationStatus = "navigating";
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "navigating", projectId, fileId }));
+
+          // Background: navigate + reconnect
+          try {
+            log(`[nav] Navigating to project=${projectId}, file=${fileId} ...`);
+            await page.goto(`${PENPOT_URI}/#/workspace/${projectId}/${fileId}`, {
+              waitUntil: "domcontentloaded",
+              timeout: NAV_TIMEOUT,
+            });
+            await page.waitForSelector('[class*="viewport"]', {
+              state: "visible",
+              timeout: NAV_TIMEOUT,
+            });
+            log("[nav] Workspace loaded. Reconnecting plugin ...");
+            await reconnectPlugin(page);
+          } catch (err) {
+            navigationStatus = "error";
+            log(`[nav] Navigation failed: ${err.message}`);
+          }
+        } catch (err) {
+          // JSON parse error — response may already be sent
+          if (!res.writableEnded) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Invalid JSON body" }));
+          }
+        }
+      });
+      return;
+    }
+
+    // Fallback
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Not found" }));
+  });
+
+  server.listen(3000, "0.0.0.0", () => {
+    log("Bridge server listening on http://0.0.0.0:3000");
+  });
+
+  return server;
 }
 
 // ---------------------------------------------------------------------------

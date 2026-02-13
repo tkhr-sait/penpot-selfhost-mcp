@@ -13,6 +13,8 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | penpot-valkey | Redis 互換 KVS | (internal) |
 | penpot-mcp-claude | MCP Plugin Server (Claude Code用) | 4400, 4401, 4402 |
 | penpot-mcp-copilot | MCP Plugin Server (Copilot用) | 4410, 4411, 4412 |
+| penpot-mcp-connect-claude | MCP Auto-Connect + Bridge Server (Claude Code用) | (internal: 3000) |
+| penpot-mcp-connect-copilot | MCP Auto-Connect + Bridge Server (Copilot用) | (internal: 3000) |
 
 ### ポート構成
 
@@ -25,6 +27,33 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | 4410 | プラグイン静的ファイル配信 (Copilot) | `PENPOT_MCP_COPILOT_PLUGIN_PORT` |
 | 4411 | MCP HTTP/SSE エンドポイント (Copilot) | `PENPOT_MCP_COPILOT_HTTP_PORT` |
 | 4412 | WebSocket (Copilot) | `PENPOT_MCP_COPILOT_WS_PORT` |
+
+### mcp-connect ブリッジサーバー
+
+各 mcp-connect コンテナは以下の2つの機能を提供する:
+
+1. **Playwright 自動接続**: headless Chromium で Penpot にログイン → ワークスペースを開く → MCP プラグインを接続
+2. **ブリッジ HTTP サーバー** (port 3000): Plugin iframe (`execute_code`) からのリクエストをブラウザセッション (Cookie 認証) を利用して処理
+
+#### エンドポイント
+
+| エンドポイント | メソッド | 用途 |
+|---|---|---|
+| `/api-proxy` | POST | REST API プロキシ（`{ command, params }` → Cookie 認証でバックエンドへ転送） |
+| `/api-proxy` | GET | 読み取り専用 REST API プロキシ（`?command=...&key=val`） |
+| `/navigate` | POST | ファイル切替（`{ projectId, fileId }` → Playwright でワークスペース遷移 + プラグイン再接続） |
+| `/status` | GET | ナビゲーション状態（`ready` / `navigating` / `reconnecting` / `error`） |
+
+#### アクセス経路
+
+```
+execute_code (Plugin iframe)
+  → fetch('http://localhost:3000/api-proxy', ...)
+  → mcp-connect ブリッジサーバー (:3000)
+  → ブラウザ Cookie 付与 → Penpot Backend (:6060)
+```
+
+port 3000 はコンテナ内部のみ（ホスト非公開）。`penpot-rest-api.js` の `storage.api()` / `storage.openFile()` が使用。
 
 ## ユーザーアカウント構成
 
@@ -50,6 +79,8 @@ bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh create-profi
 ```
 
 追加後、オンボーディングスキップと共有チームへの追加を行う:
+
+> **Note**: コンテナ名 `penpot-penpot-postgres-1` は `PROJECT_NAME="penpot"` に依存。変更時は `{PROJECT_NAME}-penpot-postgres-1` に読み替え。
 
 ```bash
 # オンボーディングをスキップ

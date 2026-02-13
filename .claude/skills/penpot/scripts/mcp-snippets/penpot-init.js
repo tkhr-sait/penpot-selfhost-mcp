@@ -5,13 +5,28 @@
 // Provides: storage.getToken, storage.tokenFill, storage.tokenStroke,
 //           storage.spacing, storage.createText,
 //           storage.createAndOpenPage, storage.assertCurrentPage,
-//           storage.getFileComments
+//           storage.getFileComments, storage.connectLibrary
 // ============================================================
 // NOTE: tokenFill/tokenStroke はトークン未定義時に null を返す。
 //       その場合はリテラル値（例: { fillColor: '#333333', fillOpacity: 1 }）でフォールバックすること。
 
 // セマンティックカラートークン取得
-storage.getToken = (name) => penpot.library.local.colors.find(c => c.name === name);
+// Penpot はスラッシュ命名を path と name に分離して保存する。
+//   登録名: "Design system / Colors / Brand / Primary"
+//   → path: "Design system / Colors / Brand", name: "Primary"
+// getToken は完全名（path + " / " + name）でもリーフ名でも検索可能。
+// 同名リーフが複数ある場合（例: Text/Primary と Brand/Primary）は完全名を使うこと。
+storage.getToken = (query) => {
+  // ローカル + 接続ライブラリの両方を検索（共有ライブラリ一本化対応）
+  for (const lib of [penpot.library.local, ...penpot.library.connected]) {
+    const found = lib.colors.find(c => {
+      const fullName = c.path ? c.path + ' / ' + c.name : c.name;
+      return fullName === query || c.name === query;
+    });
+    if (found) return found;
+  }
+  return null;
+};
 
 storage.tokenFill = (name) => {
   const token = storage.getToken(name);
@@ -40,11 +55,27 @@ storage.createText = (chars, { fontSize = 16, fontWeight = 'regular', growType =
 };
 
 // ページ作成 + 切替ヘルパー（ページ作成後の切替忘れ防止）
-// 新規ページを作成し、そのページに自動的に切り替える。
-// 戻り値: 作成された Page オブジェクト
+// 空の "Page 1" が存在する場合はリネームして再利用する（Penpot はファイル作成時に
+// Page 1 を自動生成するため、新規ページ作成前に空き Page 1 を優先利用する）。
+// ファイルには最低1ページが必要なため、Page 1 の再利用はページ数の肥大化も防ぐ。
+// 戻り値: 作成または再利用された Page オブジェクト
 storage.createAndOpenPage = async (name) => {
-  const page = penpot.createPage();
-  page.name = name;
+  let page;
+  // 空の Page 1 を探して再利用
+  const pages = penpotUtils.getPages();
+  const page1 = pages.find(p => p.name === 'Page 1');
+  if (page1) {
+    const p1 = penpotUtils.getPageById(page1.id);
+    if (p1 && p1.root.children.length === 0) {
+      p1.name = name;
+      page = p1;
+    }
+  }
+  // 再利用できなければ新規作成
+  if (!page) {
+    page = penpot.createPage();
+    page.name = name;
+  }
   penpot.openPage(page, false);
   await new Promise(r => setTimeout(r, 200));
   // 切替確認: currentPage が新ページになっていなければエラー
@@ -106,4 +137,16 @@ storage.getFileComments = async () => {
   }
   penpot.openPage(currentPage, false);
   return results;
+};
+
+// ライブラリ接続ヘルパー（connectLibrary の返り値キャッシュ問題を回避）
+// penpot.library.connectLibrary() の返り値は name: null, components: [] になることがある。
+// 接続後に penpot.library.connected から取得し直すことで正しい値を返す。
+storage.connectLibrary = async (libraryId) => {
+  await penpot.library.connectLibrary(libraryId);
+  const lib = penpot.library.connected.find(l => l.id === libraryId);
+  if (!lib) {
+    throw new Error(`[connectLibrary] 接続後にライブラリが見つかりません: ${libraryId}`);
+  }
+  return lib;
 };

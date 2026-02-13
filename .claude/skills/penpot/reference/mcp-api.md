@@ -7,6 +7,9 @@ Penpot MCP Server の構成、Plugin API の使い方、セルフホスト環境
 ```
 AI Tool (Claude Code / Copilot) --HTTP/SSE--> MCP Server (4401) <--WebSocket--> Browser Plugin (iframe)
                           Plugin static files served on port 4400
+
+Plugin iframe (execute_code) --fetch--> Bridge Server (:3000) --cookie auth--> Penpot Backend (:6060)
+                                              ↑ mcp-connect コンテナ内
 ```
 
 - **MCP Server**: LLMクライアント向けツール提供（`execute_code`, `export_shape`, `penpot_api_info` 等）
@@ -118,6 +121,9 @@ const comp = penpot.library.local.components.find(c => c.name === 'Button');
 const instance = comp.instance();          // Shape を返す
 ```
 
+**注意**: `penpot.library.connectLibrary()` の返り値は不完全な場合がある（`name: null`, `components: []`）。
+`storage.connectLibrary(id)` ラッパーを使うか、接続後に `penpot.library.connected.find(l => l.id === id)` で再取得すること。
+
 ## セルフホスト環境固有の注意
 
 ### エアギャップ構成
@@ -129,9 +135,44 @@ const instance = comp.instance();          // Shape を返す
 - Playwright の Chromium でプラグインを開くと SES (Secure EcmaScript) lockdown エラーが発生する場合がある
 - `mcp-connect.mjs` で `Object.defineProperty` ラッパーを適用して回避済み
 
-### REST API
-- デフォルトは Transit JSON → `Accept: application/json` ヘッダー必須
+### REST API 基本
+- 全エンドポイント POST + JSON。`Accept: application/json` ヘッダー必須
+- `storage.api(command, params, timeout)` でタイムアウト付き呼び出し（デフォルト10秒）
+- `penpot-rest-api.js` を execute_code で初期化して使用
 - ファイル一覧: `get-project-files`（`get-files` は存在しない）
+- `execute_code` から REST API を呼ぶ際は、mcp-connect コンテナ内のブリッジサーバー (port 3000) の `/api-proxy` を経由する。ブラウザセッションの Cookie が自動付与されるため、プラグイン側で認証情報を持つ必要がない。詳細は [selfhost.md の mcp-connect ブリッジサーバー](selfhost.md#mcp-connect-ブリッジサーバー) を参照
+
+### update-file チェンジタイプ一覧
+
+| チェンジタイプ | 用途 | 備考 |
+|---|---|---|
+| `add-color` | カラー追加 | |
+| `del-color` | カラー削除 | |
+| `add-typography` | タイポグラフィ追加 | |
+| `del-typography` | タイポグラフィ削除 | |
+| `del-component` | コンポーネント削除（ソフト） | ゴミ箱行き、復元可 |
+| `purge-component` | コンポーネント完全削除 | 復元不可 |
+| `del-page` | ページ削除 | Plugin API にページ削除なし |
+
+### クロスファイル操作
+- `storage.execInFile(projectId, fileId, operations)`: MCP切断なしで他ファイルにアセット登録
+- 便利メソッド: `registerColorsInFile()`, `registerTypographiesInFile()`
+- REST API (`update-file` の `add-color` / `add-typography` チェンジ) を使用
+
+### ライブラリ管理
+- `createFile()` / `setFileShared()` / `linkLibrary()` / `unlinkLibrary()`
+- `getCurrentProjectId()`: 接続中ファイルと同じプロジェクトにライブラリ作成
+- `getTeamId()`: Shared Workspace チームを優先
+- `get-file-libraries` は推移的依存も返す（重複表示されるが実害なし）
+- `duplicateFile` は全ページ・接続を引き継ぐ → 不要ページ（`del-page`）・不要接続（`unlinkLibrary`）を整理
+
+### ファイル切替
+- `storage.openFile(projectId, fileId)` → ブリッジサーバーの `/navigate` エンドポイントを呼び出し、Playwright がワークスペース URL を遷移 → MCP 再接続発生（10-15秒）
+- `storage.waitForReconnect()` でブリッジサーバーの `/status` を polling し、`ready` になるまで待機
+- 再接続後、MCP ツールを呼び出して接続確認。エラー時のみ `/mcp` → Reconnect を案内。`penpot-init.js` + `penpot-rest-api.js` 再初期化が必要
+
+### 画像エクスポート
+- `board.export({ type: 'png', scale: 1.5 })` 推奨（2100x1500相当）
 
 ### テキスト色変更
 REST API で作成されたテキストは content-level に色情報が埋め込まれており、`shape.fills` / `range.fills` 変更が反映されない場合がある。確実な方法は **テキスト削除→再作成**。

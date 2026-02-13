@@ -5,12 +5,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 PROJECT_NAME="penpot"
 
+# Derived names from PROJECT_NAME
+CT_BACKEND="${PROJECT_NAME}-penpot-backend-1"
+CT_POSTGRES="${PROJECT_NAME}-penpot-postgres-1"
+CT_MCP_CONNECT_CLAUDE="${PROJECT_NAME}-penpot-mcp-connect-claude-1"
+IMG_MCP_CLAUDE="${PROJECT_NAME}-penpot-mcp-claude"
+IMG_MCP_COPILOT="${PROJECT_NAME}-penpot-mcp-copilot"
+IMG_MCP_CONNECT_CLAUDE="${PROJECT_NAME}-penpot-mcp-connect-claude"
+IMG_MCP_CONNECT_COPILOT="${PROJECT_NAME}-penpot-mcp-connect-copilot"
+VOL_ASSETS="${PROJECT_NAME}_penpot_assets"
+
 dc() {
   docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 
 _run_penpot_api() {
-  docker exec penpot-penpot-mcp-connect-claude-1 \
+  docker exec $CT_MCP_CONNECT_CLAUDE \
     node /app/penpot-api.mjs --uri "http://penpot-frontend:8080" "$@"
 }
 
@@ -47,19 +57,19 @@ _show_mcp_info() {
 
 cmd_up() {
   echo "Starting Penpot..."
-  if ! docker image inspect penpot-penpot-mcp-claude > /dev/null 2>&1; then
+  if ! docker image inspect $IMG_MCP_CLAUDE > /dev/null 2>&1; then
     echo "Building MCP Claude server image (first run, may take a few minutes)..."
     dc build penpot-mcp-claude
   fi
-  if ! docker image inspect penpot-penpot-mcp-copilot > /dev/null 2>&1; then
+  if ! docker image inspect $IMG_MCP_COPILOT > /dev/null 2>&1; then
     echo "Building MCP Copilot server image (first run, may take a few minutes)..."
     dc build penpot-mcp-copilot
   fi
-  if ! docker image inspect penpot-penpot-mcp-connect-claude > /dev/null 2>&1; then
+  if ! docker image inspect $IMG_MCP_CONNECT_CLAUDE > /dev/null 2>&1; then
     echo "Building MCP Claude auto-connect image (first run, may take a few minutes)..."
     dc build penpot-mcp-connect-claude
   fi
-  if ! docker image inspect penpot-penpot-mcp-connect-copilot > /dev/null 2>&1; then
+  if ! docker image inspect $IMG_MCP_CONNECT_COPILOT > /dev/null 2>&1; then
     echo "Building MCP Copilot auto-connect image (first run, may take a few minutes)..."
     dc build penpot-mcp-connect-copilot
   fi
@@ -91,7 +101,7 @@ _auto_setup_profile() {
   # Wait for backend to be ready
   echo "Waiting for backend to be ready..."
   local retries=30
-  while ! docker exec penpot-penpot-backend-1 curl -sf http://localhost:6060/readyz > /dev/null 2>&1; do
+  while ! docker exec $CT_BACKEND curl -sf http://localhost:6060/readyz > /dev/null 2>&1; do
     retries=$((retries - 1))
     if [ "$retries" -le 0 ]; then
       echo "Warning: backend not ready, skipping auto-setup."
@@ -102,16 +112,16 @@ _auto_setup_profile() {
 
   # Check if profile already exists
   local exists
-  exists=$(docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -tAc \
+  exists=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
     "SELECT count(*) FROM profile WHERE email = '$email';" 2>/dev/null || echo "0")
 
   if [ "$exists" = "0" ]; then
     echo "Creating default profile ($email)..."
-    docker exec -i penpot-penpot-backend-1 python3 manage.py create-profile \
+    docker exec -i $CT_BACKEND python3 manage.py create-profile \
       -e "$email" -n "$fullname" -p "$password" 2>/dev/null || true
 
     # Skip onboarding
-    docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c \
+    docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c \
       "UPDATE profile SET props = props || '{\"~:viewed-tutorial?\": true, \"~:viewed-walkthrough?\": true, \"~:onboarding-viewed\": true}'::jsonb WHERE email = '$email';" > /dev/null 2>&1
 
     echo "Test user ready: $email / $password"
@@ -124,16 +134,16 @@ _create_mcp_user() {
   local fullname="$3"
 
   local exists
-  exists=$(docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -tAc \
+  exists=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
     "SELECT count(*) FROM profile WHERE email = '$email';" 2>/dev/null || echo "0")
 
   if [ "$exists" = "0" ]; then
     echo "Creating MCP profile ($email)..."
-    docker exec -i penpot-penpot-backend-1 python3 manage.py create-profile \
+    docker exec -i $CT_BACKEND python3 manage.py create-profile \
       -e "$email" -n "$fullname" -p "$password" 2>/dev/null || true
 
     # Skip onboarding
-    docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c \
+    docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c \
       "UPDATE profile SET props = props || '{\"~:viewed-tutorial?\": true, \"~:viewed-walkthrough?\": true, \"~:onboarding-viewed\": true}'::jsonb WHERE email = '$email';" > /dev/null 2>&1
 
     echo "MCP user ready: $email / $password"
@@ -157,7 +167,7 @@ _setup_shared_teams() {
 
   # Check if shared team already exists
   local team_id
-  team_id=$(docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -tAc \
+  team_id=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
     "SELECT id FROM team WHERE name = '$team_name' AND is_default = false LIMIT 1;" 2>/dev/null)
   team_id=$(echo "$team_id" | tr -d '[:space:]')
 
@@ -178,7 +188,7 @@ _setup_shared_teams() {
   fi
 
   # Add ALL profiles to the shared team (idempotent)
-  docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c "
+  docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c "
     INSERT INTO team_profile_rel (team_id, profile_id, is_owner, is_admin, can_edit)
     SELECT '${team_id}'::uuid, p.id, true, true, true
     FROM profile p
@@ -195,7 +205,7 @@ _setup_mcp_workspace() {
 
   # Check if MCP user already has files via SQL
   local file_count
-  file_count=$(docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -tAc \
+  file_count=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
     "SELECT count(*) FROM file f
      JOIN project p ON f.project_id = p.id
      JOIN team t ON p.team_id = t.id
@@ -270,7 +280,7 @@ cmd_create_profile() {
     echo
   fi
 
-  docker exec -i penpot-penpot-backend-1 python3 manage.py create-profile \
+  docker exec -i $CT_BACKEND python3 manage.py create-profile \
     -e "$email" -n "$fullname" -p "$password"
   echo "Profile created: $email"
 }
@@ -288,7 +298,7 @@ cmd_setup() {
   # Wait for backend to be ready
   echo "Waiting for backend..."
   local retries=30
-  while ! docker exec penpot-penpot-backend-1 curl -sf http://localhost:6060/readyz > /dev/null 2>&1; do
+  while ! docker exec $CT_BACKEND curl -sf http://localhost:6060/readyz > /dev/null 2>&1; do
     retries=$((retries - 1))
     if [ "$retries" -le 0 ]; then
       echo "Error: backend did not become ready in time."
@@ -297,11 +307,11 @@ cmd_setup() {
     sleep 2
   done
 
-  docker exec -i penpot-penpot-backend-1 python3 manage.py create-profile \
+  docker exec -i $CT_BACKEND python3 manage.py create-profile \
     -e "$email" -n "$fullname" -p "$password" 2>/dev/null || true
 
   # Mark onboarding as completed so "Help us get to know you" is skipped
-  docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c \
+  docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c \
     "UPDATE profile SET props = props || '{\"~:viewed-tutorial?\": true, \"~:viewed-walkthrough?\": true, \"~:onboarding-viewed\": true}'::jsonb WHERE email = '$email';" > /dev/null 2>&1
 
   echo ""
@@ -316,12 +326,12 @@ cmd_backup() {
   mkdir -p "$backup_dir"
 
   echo "Backing up PostgreSQL..."
-  docker exec penpot-penpot-postgres-1 \
+  docker exec $CT_POSTGRES \
     pg_dump -U penpot penpot | gzip > "$backup_dir/penpot_db_$timestamp.sql.gz"
 
   echo "Backing up assets..."
   docker run --rm \
-    -v penpot_penpot_assets:/data \
+    -v $VOL_ASSETS:/data \
     -v "$backup_dir":/backup \
     alpine tar czf "/backup/penpot_assets_$timestamp.tar.gz" -C /data .
 
@@ -339,13 +349,13 @@ cmd_restore() {
   fi
 
   echo "Restoring PostgreSQL from $db_backup..."
-  gunzip -c "$db_backup" | docker exec -i penpot-penpot-postgres-1 \
+  gunzip -c "$db_backup" | docker exec -i $CT_POSTGRES \
     psql -U penpot -d penpot
 
   if [ -n "$assets_backup" ]; then
     echo "Restoring assets from $assets_backup..."
     docker run --rm \
-      -v penpot_penpot_assets:/data \
+      -v $VOL_ASSETS:/data \
       -v "$(dirname "$assets_backup")":/backup \
       alpine sh -c "rm -rf /data/* && tar xzf /backup/$(basename "$assets_backup") -C /data"
   fi
@@ -376,7 +386,7 @@ cmd_mcp_connect() {
         exit 1
       fi
       echo "Restarting MCP auto-connect (Claude)..."
-      dc restart penpot-mcp-connect-claude
+      dc up -d --force-recreate penpot-mcp-connect-claude
       echo "Check logs: bash $0 logs penpot-mcp-connect-claude"
       ;;
     copilot)
@@ -386,7 +396,7 @@ cmd_mcp_connect() {
         exit 1
       fi
       echo "Restarting MCP auto-connect (Copilot)..."
-      dc restart penpot-mcp-connect-copilot
+      dc up -d --force-recreate penpot-mcp-connect-copilot
       echo "Check logs: bash $0 logs penpot-mcp-connect-copilot"
       ;;
     all)
@@ -394,12 +404,12 @@ cmd_mcp_connect() {
       if dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp-connect-claude; then
         has_service=true
         echo "Restarting MCP auto-connect (Claude)..."
-        dc restart penpot-mcp-connect-claude
+        dc up -d --force-recreate penpot-mcp-connect-claude
       fi
       if dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp-connect-copilot; then
         has_service=true
         echo "Restarting MCP auto-connect (Copilot)..."
-        dc restart penpot-mcp-connect-copilot
+        dc up -d --force-recreate penpot-mcp-connect-copilot
       fi
       if [ "$has_service" = false ]; then
         echo "Error: No MCP connect services are running."

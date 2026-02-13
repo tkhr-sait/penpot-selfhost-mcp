@@ -3,7 +3,7 @@
 ![Claude CodeからPenpotにUIデザインを作成しているスクリーンショット](docs/images/top.png)
 
 [Penpot](https://penpot.app/) セルフホスト環境 + MCP サーバーのオールインワン Docker Compose 構成。
-AI エージェント（Claude Code / GitHub Copilot）に自然言語で話しかけるだけで、Penpot 上に UI デザインを作成できる。
+AI エージェント（Claude Code / GitHub Copilot）に自然言語で話しかけるだけで、Penpot 上に UI デザインの作成やデザインシステムの構築ができる。
 
 ## 仕組み — Agent Skills
 
@@ -17,9 +17,12 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 ├── SKILL.md                        # スキル定義（エントリーポイント）
 ├── reference/                      # AI が参照するナレッジベース
 │   ├── design.md                   #   デザインワークフロー・原則
+│   ├── library-architecture.md     #   ライブラリ分割戦略・依存関係
 │   ├── mcp-api.md                  #   MCP / Plugin API リファレンス
 │   ├── selfhost.md                 #   セルフホスト環境の構成情報
-│   └── ...
+│   └── workflow-phases.md          #   デザインシステム構築フェーズ詳細
+├── docs/                           # 利用ガイド
+│   └── github-copilot.md          #   GitHub Copilot での利用ガイド
 └── scripts/                        # AI が実行するスクリプト群
     ├── penpot-selfhost/            #   Docker 環境管理・MCP 自動接続
     └── mcp-snippets/               #   デザインユーティリティ・検証
@@ -32,6 +35,14 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 3. **MCP 接続** — Playwright による自動ブラウザ操作で Penpot Plugin 経由の MCP 接続を確立
 4. **デザイン作成** — MCP 経由の Plugin API でシェイプ・レイアウト・インタラクションを構築
 5. **検証** — デザイン制約の自動チェックとビジュアル確認
+
+デザインシステムの構築では、さらに以下のフェーズを段階的に進める:
+
+1. **監査・棚卸し** — 既存 UI の色・フォント・余白を収集し重複・不整合を可視化
+2. **Design Tokens 定義** — カラー・タイポグラフィ・スペーシングをトークンとしてライブラリに登録
+3. **コンポーネント構築** — ボタン・フォーム・カードなどをバリアント付きで設計
+4. **ライブラリ分割・共有** — トークンとコンポーネントを独立ライブラリに分割し依存関係を設定
+5. **運用・メンテナンス** — 定期監査とバージョニングで品質を維持
 
 スキルが AI エージェントの「手順書」として機能し、**インフラ構築からデザイン作成までをエンドツーエンドで自律実行する**仕組みになっている。
 
@@ -51,6 +62,8 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 
 ### プロンプト例
 
+> **penpotにユーザ追加して。test@example.com**
+>
 > **penpotでTODOアプリケーションのプロトタイプをインタラクション付きで作成して**
 >
 > **penpotでレビューして結果をコメント登録して**
@@ -59,16 +72,18 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 >
 > **penpotで作成したTODOアプリケーションのプロトタイプをもとに、アプリケーションを作成して**
 >
-> **penpotにユーザ追加して。test@example.com**
+> **penpotでデザインシステムを構築して**
+>
+> **penpotで既存のデザインを監査してトークンを抽出して**
 
 手動で環境を管理する場合は [SKILL.md](.claude/skills/penpot/SKILL.md) を参照。
 
 ## 対応AIツール
 
-| ツール                   | MCP設定ファイル    | 備考                              |
-| ------------------------ | ------------------ | --------------------------------- |
-| Claude Code(CLI)         | `.mcp.json`        | `npx mcp-remote` 経由で HTTP 接続 |
-| GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応              |
+| ツール                   | MCP設定ファイル    | 備考                                                                              |
+| ------------------------ | ------------------ | --------------------------------------------------------------------------------- |
+| Claude Code(CLI)         | `.mcp.json`        | `npx mcp-remote` 経由で HTTP 接続                                                 |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応 → [利用ガイド](.claude/skills/penpot/docs/github-copilot.md) |
 
 > Claude Code の [VS Code extension](https://code.claude.com/docs/en/vs-code#vs-code-extension-vs-claude-code-cli) を使う場合は `/penpot` でスキルを明示的に起動する必要がある。
 
