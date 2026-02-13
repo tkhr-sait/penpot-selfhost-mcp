@@ -95,13 +95,13 @@ Claude Code と GitHub Copilot はそれぞれ専用の MCP サーバーイン�
 ### MCP 活用方針
 
 - 全フェーズ共通で `penpot-init.js` を最初に初期化
-- Phase 01: `storage.getToken()` + `validate-design.js` で自動監査
+- Phase 01: `penpotUtils.findTokenByName()` / `penpotUtils.tokenOverview()` + `validate-design.js` で自動監査
 - Phase 02: `storage.createAndOpenPage()` + `storage.createText()` + `storage.spacing` でワイヤーフレーム
-- Phase 03: 共有ライブラリへ `execInFile` で直接登録（ローカルとの二重管理禁止）
+- Phase 03: ネイティブトークン API (`penpot.library.local.tokens`) でトークン定義
 - Phase 04: コンポーネント命名は `path` と `name` を個別に設定。デザイン実装は「デザイン作成」セクションの4フェーズに従う
 - Phase 05: `penpot-rest-api.js` 初期化 → `createFile` / `setFileShared` / `linkLibrary` でライブラリ構築。`duplicateFile` 利用時は不要ページ・不要接続を整理。詳細は [reference/library-architecture.md](reference/library-architecture.md) と [reference/mcp-api.md](reference/mcp-api.md) を参照
 - Phase 06: デザイン実装は「デザイン作成」セクションの4フェーズ（理解→設計→実装→レビュー）に従う
-- Phase 07: `penpot.generateStyle()` / `generateMarkup()` + `storage.getToken()` でコード生成
+- Phase 07: `penpot.generateStyle()` / `generateMarkup()` + `penpotUtils.findTokenByName()` でコード生成
 - Phase 08: `validate-design.js` + `storage.getFileComments()` で定期監査
 
 トークンの具体値（カラー・タイポグラフィ）は [reference/design.md](reference/design.md) を参照。
@@ -149,15 +149,14 @@ Claude Code と GitHub Copilot はそれぞれ専用の MCP サーバーイン�
 - **`fontFamily: "sourcesanspro"` のみ**（セルフホスト環境の唯一のビルトインフォント）
 
 #### ライブラリ管理
-- 共有ライブラリに一本化（ローカルとの二重管理禁止）
-- `getToken()` はローカル + 接続ライブラリを検索
-- ライブラリ間の依存接続必須（UI Components → Colors / Typography）
+- カラー・タイポグラフィはネイティブ Design Tokens で管理（ライブラリファイル不要）
+- コンポーネントは共有ライブラリで管理
 - コンポーネント命名: `path` と `name` を個別に設定（スラッシュ記法の `name` 一括設定は path 二重化の原因）
 - 詳細は [reference/mcp-api.md](reference/mcp-api.md) と [reference/library-architecture.md](reference/library-architecture.md) を参照
 
 #### API 制約・注意
 - `high_level_overview` のシステムプロンプト遵守（insertChild、growType、Flex順序等）
-- Plugin API `remove()` は非永続 → アセット削除は REST API を使う
+- Plugin API `remove()` はコンポーネントの削除に非永続 → REST API (`del-component` / `purge-component`) を使う
 - Plugin API 大量操作は WebSocket 切断リスク → REST API 優先
 - デザイン完了後: `validate-design.js` で制約違反を検出
 - 詳細は [reference/mcp-api.md](reference/mcp-api.md) を参照

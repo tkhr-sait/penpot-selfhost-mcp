@@ -45,7 +45,7 @@
 `penpot-init.js` を初期化後、`execute_code` で既存デザインをプログラム的に分析:
 
 #### カラー使用状況の収集
-全シェイプの fills/strokes を走査し、使用色を集計。`storage.getToken()` でライブラリ登録済みトークンと突合し、未登録色を検出。
+全シェイプの fills/strokes を走査し、使用色を集計。`penpotUtils.findTokenByName()` でネイティブデザイントークンと突合し、未登録色を検出。
 
 #### フォント・テキスト不整合の検出
 `validate-design.js` を実行し、fontFamily/サイズ/growType の違反を自動検出。
@@ -113,23 +113,14 @@
 ## Phase 03: Design Tokens の定義
 
 ### 目的
-デザインシステムの最小単位となるトークンをPenpotで定義・管理する。
+デザインシステムの最小単位となるトークンをPenpotのネイティブデザイントークン機能で定義・管理する。
 
 ### Penpotでの操作
 
-#### カラートークン
-1. Assetsパネル → カラーを追加
-2. 命名規則: `Design system / Colors / [カテゴリ] / [名前]`
-   - 例: `Design system / Colors / Primary / Blue 500`
-   - 例: `Design system / Colors / Semantic / Error`
-3. カラーパレットからワンクリックで適用（Alt+クリックでストロークに適用）
-
-#### タイポグラフィトークン
-1. ダッシュボード → Fonts からWebフォントをアップロード（チーム単位で管理）
-2. Assetsパネル → Typographies を追加
-3. 命名規則: `Design system / Typography / [名前]`
-   - 例: `Design system / Typography / H1`
-4. テキスト選択 → パレットから適用
+#### デザイントークン（ネイティブ）
+1. Design Tokens パネルでトークンセット・テーマを管理
+2. トークンタイプ: color, dimension, spacing, typography, shadow, opacity, borderRadius, borderWidth, fontWeights, fontSizes, fontFamilies, letterSpacing, textDecoration, textCase
+3. トークンをシェイプに適用 → トークン値の変更がシェイプに自動反映
 
 #### スペーシング・レイアウト
 1. Flex Layout / Grid Layout のルールを標準化
@@ -140,41 +131,41 @@
 
 `penpot-init.js` 初期化後:
 
-#### カラートークンの登録
-`storage.getToken(name)` で既存トークンの重複をチェックしてから `penpot.library.local.createColor()` で登録。
+#### トークンの登録（ネイティブ API）
 
 ```javascript
-// 重複チェック付きカラー登録
-const name = 'Design system / Colors / Primary / Blue 500';
-if (!storage.getToken(name)) {
-  const color = penpot.library.local.createColor();
-  color.name = name;
-  color.color = '#3B82F6';
-}
-```
+// トークンカタログ
+const catalog = penpot.library.local.tokens;
 
-#### タイポグラフィの登録
-`penpot.library.local.createTypography()` で一括登録。`fontFamily` は必ず `"sourcesanspro"`。
+// セット作成
+const set = catalog.addSet('Semantic');
 
-```javascript
-const typo = penpot.library.local.createTypography();
-typo.name = 'Design system / Typography / H1';
-typo.fontFamily = 'sourcesanspro';
-typo.fontSize = '32';
-typo.fontWeight = 'bold';
+// カラートークン
+set.addToken('color', 'color.primary', '#3B82F6');
+set.addToken('color', 'color.error', '#EF4444');
+
+// スペーシングトークン
+set.addToken('spacing', 'spacing.sm', '8');
+set.addToken('spacing', 'spacing.md', '16');
+
+// セット有効化
+if (!set.active) set.toggleActive();
+
+// トークン適用
+const token = penpotUtils.findTokenByName('color.primary');
+shape.applyToken(token, ['fill']);
+
+// 概観確認
+penpotUtils.tokenOverview();
 ```
 
 #### スペーシングルール
 `storage.spacing` (xs:4 〜 3xl:64) をプロジェクト標準として定義。
 
-#### トークン確認
-`penpot.library.local.colors` / `.typographies` を走査して登録結果を確認。
-
 定義するトークンの具体値は [design.md](design.md) を参照。
 
 ### 成果物
-- カラートークン一覧（Penpot Assets）
-- タイポグラフィスケール（Penpot Typography）
+- デザイントークンセット（Penpot Native Design Tokens）
 - スペーシングルール定義
 
 ---
@@ -208,7 +199,7 @@ typo.fontWeight = 'bold';
 `penpot-init.js` 初期化後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）に従い:
 
 1. `storage.createAndOpenPage('Components')` でコンポーネント展示ページ作成
-2. `storage.tokenFill()` / `storage.tokenStroke()` でトークンカラー適用
+2. `penpotUtils.findTokenByName()` + `shape.applyToken(token, ['fill'])` でトークンカラー適用
 3. `storage.createText()` でコンポーネント内テキスト作成
 4. `storage.spacing` でパディング・マージン統一
 5. `penpot.library.local.createComponent(shapes)` でコンポーネント化
@@ -250,7 +241,7 @@ typo.fontWeight = 'bold';
 ### MCP によるライブラリ操作
 
 #### ローカルライブラリの管理
-`penpot.library.local` でカラー・タイポグラフィ・コンポーネントを管理。
+`penpot.library.local` でコンポーネントを管理。カラー・タイポグラフィはネイティブデザイントークンで管理（Phase 03 参照）。
 
 #### 外部ライブラリの接続
 
@@ -260,38 +251,22 @@ const lib = await penpot.library.connectLibrary(id);
 ```
 
 #### 接続ライブラリのアセット利用
-`lib.colors` / `lib.typographies` / `lib.components` から取得し、`asFill()` / `asStroke()` / `instance()` で適用。
+`lib.components` から取得し、`instance()` で適用。
 
-### REST API によるライブラリ分割・接続ワークフロー
+### REST API によるライブラリ管理
 
-`penpot-rest-api.js` を初期化すれば、ファイル作成からアセット登録・ライブラリ接続まで MCP で完結する。
+`penpot-rest-api.js` を初期化すれば、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
 
-#### 推奨: REST API 方式（Plugin API・MCP 切断不要）
+1. **ライブラリファイル作成**: `await storage.createFile(projectId, 'UI Components Lib', { isShared: true })`
+2. **ライブラリ接続**: `await storage.linkLibrary(originalFileId, libFileId)`
 
-1. **ライブラリファイル作成**: `await storage.createFile(projectId, 'Colors Lib', { isShared: true })`
-2. **アセット登録**: `await storage.execInFile(projectId, libFileId, operations)` — REST API (`update-file`) 経由
-   - 便利メソッド: `storage.registerColorsInFile()` / `storage.registerTypographiesInFile()`
-3. **ライブラリ接続**: `await storage.linkLibrary(originalFileId, libFileId)`
-
-```javascript
-// 例: カラーライブラリの作成と登録を1ステップで
-const libFile = await storage.createFile(projectId, 'Colors Lib', { isShared: true });
-await storage.registerColorsInFile(projectId, libFile.id, [
-  { name: 'Design system / Colors / Primary / Blue 500', color: '#3B82F6' },
-  { name: 'Design system / Colors / Semantic / Error', color: '#EF4444' },
-]);
-await storage.linkLibrary(currentFileId, libFile.id);
-```
-
-#### 代替: openFile 方式（コンポーネント登録等、Plugin API が必要な場合のみ）
+#### openFile 方式（コンポーネント登録等、Plugin API が必要な場合）
 
 1. **ファイル切替**: `await storage.openFile(projectId, newFileId)` — MCP 再接続が発生（10-15秒）
 2. **再接続**: `/mcp` → `penpot-official` → Reconnect → `penpot-init.js` + `penpot-rest-api.js` を再初期化
 3. **アセット登録**: Plugin API でコンポーネント等を登録
 4. **元ファイルに戻る**: `await storage.openFile(projectId, originalFileId)` → 再接続 → 再初期化
 5. **ライブラリ接続**: `await storage.linkLibrary(originalFileId, libFileId)`
-
-> **注意**: `execInFile` は REST API (`update-file` の `add-color` / `add-typography` チェンジ) を使用し、Plugin API や MCP 接続は不要。カラー・タイポグラフィ登録には `execInFile` を推奨。コンポーネント構築など複雑な操作にはフルワークスペース切替（`openFile`）が必要。
 
 ### 成果物
 - 分割ライブラリ構成
@@ -389,7 +364,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 ```
 
 #### トークン→コード変換
-`storage.getToken(name)` でトークン名からカラーコードを取得し、CSS カスタムプロパティや設計変数として出力。
+`penpotUtils.findTokenByName(name)` でトークン名から値を取得し、CSS カスタムプロパティや設計変数として出力。`penpotUtils.tokenOverview()` でトークン一覧を確認。
 
 #### デザイン仕様のプログラム抽出
 シェイプの fills/strokes/fontSize 等を `execute_code` で走査し、仕様書を自動生成。
@@ -431,7 +406,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 フォント・テキストサイズ・growType の違反を自動検出。
 
 #### 一貫性チェック（拡張）
-- `storage.getToken()` でライブラリトークンと実使用色を突合 → 未登録カラー検出
+- `penpotUtils.findTokenByName()` / `penpotUtils.tokenOverview()` でネイティブトークンと実使用色を突合 → 未登録カラー検出
 - `storage.spacing` の値で parentX/parentY を検証 → グリッド逸脱検出
 - `penpotUtils.analyzeDescendants()` でボード単位の制約検証
 

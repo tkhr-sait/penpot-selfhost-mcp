@@ -2,5 +2,8 @@
   "permissions": {
     "allow": ["mcp__penpot-official", "Skill(penpot)", "Bash(bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh *)"]
   },
-  "enabledMcpjsonServers": ["penpot-official"]
+  "enabledMcpjsonServers": ["penpot-official"],
+  "env": {
+    "MCP_TOOL_TIMEOUT": "60000"
+  }
 }

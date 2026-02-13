@@ -135,7 +135,7 @@ services:
     build:
       context: ./penpot-mcp
       args:
-        PENPOT_REF: "2.13.2"
+        PENPOT_REF: "develop"
     restart: unless-stopped
     depends_on:
       - penpot-frontend
@@ -157,7 +157,7 @@ services:
     build:
       context: ./penpot-mcp
       args:
-        PENPOT_REF: "2.13.2"
+        PENPOT_REF: "develop"
     restart: unless-stopped
     depends_on:
       - penpot-frontend

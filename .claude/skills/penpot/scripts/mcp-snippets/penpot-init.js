@@ -2,41 +2,10 @@
 // Penpot Design Utilities
 // Read this file, then run via MCP execute_code.
 //
-// Provides: storage.getToken, storage.tokenFill, storage.tokenStroke,
-//           storage.spacing, storage.createText,
+// Provides: storage.spacing, storage.createText,
 //           storage.createAndOpenPage, storage.assertCurrentPage,
 //           storage.getFileComments, storage.connectLibrary
 // ============================================================
-// NOTE: tokenFill/tokenStroke はトークン未定義時に null を返す。
-//       その場合はリテラル値（例: { fillColor: '#333333', fillOpacity: 1 }）でフォールバックすること。
-
-// セマンティックカラートークン取得
-// Penpot はスラッシュ命名を path と name に分離して保存する。
-//   登録名: "Design system / Colors / Brand / Primary"
-//   → path: "Design system / Colors / Brand", name: "Primary"
-// getToken は完全名（path + " / " + name）でもリーフ名でも検索可能。
-// 同名リーフが複数ある場合（例: Text/Primary と Brand/Primary）は完全名を使うこと。
-storage.getToken = (query) => {
-  // ローカル + 接続ライブラリの両方を検索（共有ライブラリ一本化対応）
-  for (const lib of [penpot.library.local, ...penpot.library.connected]) {
-    const found = lib.colors.find(c => {
-      const fullName = c.path ? c.path + ' / ' + c.name : c.name;
-      return fullName === query || c.name === query;
-    });
-    if (found) return found;
-  }
-  return null;
-};
-
-storage.tokenFill = (name) => {
-  const token = storage.getToken(name);
-  return token ? token.asFill() : null;
-};
-
-storage.tokenStroke = (name) => {
-  const token = storage.getToken(name);
-  return token ? token.asStroke() : null;
-};
 
 // スペーシング定数
 storage.spacing = {

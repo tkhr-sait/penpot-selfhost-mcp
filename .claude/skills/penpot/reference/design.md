@@ -37,7 +37,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 **実装ルール:**
 - フォント: **`fontFamily: "sourcesanspro"` のみ使用**（セルフホスト固有）
 - スペーシング: 4px/8pxグリッドシステム（4, 8, 12, 16, 24, 32, 48, 64）
-- カラー: 既存のセマンティックカラートークン（ライブラリカラー）を優先使用
+- カラー: 既存のセマンティックカラートークン（ネイティブ Design Tokens）を優先使用
 - レイアウト: Flex/Gridレイアウトを積極活用
 - **ページ作成: `storage.createAndOpenPage(name)` 必須**（`createPage()` 単体は切替されない）
 - ページ切替: `penpot.openPage(page, false)` — 第2引数 `false` 必須
@@ -84,7 +84,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ## セマンティックカラートークン
 
-ライブラリに定義済みの14色トークン。`penpot.library.local.colors` から取得して `asFill()` / `asStroke()` で適用する。
+ネイティブデザイントークンとして定義する14色。`penpotUtils.findTokenByName()` で検索し、`shape.applyToken()` で適用する。
 
 | トークン | 用途 |
 |---------|------|
@@ -103,22 +103,25 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 | border-primary | 主要ボーダー |
 | border-light | 軽いボーダー・区切り線 |
 
-### トークン取得ヘルパー
+### トークン取得・適用
 
 ```javascript
-// カラートークンを名前で取得
-function getToken(name) {
-  return penpot.library.local.colors.find(c => c.name === name);
-}
+// トークン検索
+const token = penpotUtils.findTokenByName('accent-blue');
 
-// 使用例
-const fill = getToken('accent-blue').asFill();
-shape.fills = [fill];
+// シェイプに適用
+shape.applyToken(token, ['fill']);
+
+// ストロークに適用
+shape.applyToken(token, ['stroke-color']);
+
+// トークン一覧確認
+penpotUtils.tokenOverview();
 ```
 
 ## タイポグラフィスケール
 
-全て `fontFamily: "sourcesanspro"` を使用:
+ネイティブタイポグラフィトークンとして登録する。全て `fontFamily: "sourcesanspro"` を使用:
 
 | レベル | fontSize | fontWeight | 用途 |
 |--------|----------|------------|------|

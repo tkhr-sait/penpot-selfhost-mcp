@@ -13,16 +13,6 @@ Penpotのデザインシステムを構成するライブラリの分割戦略�
 
 ```
 Design System/
-├── Colors Lib
-│   ├── Primary / Secondary
-│   ├── Semantic (success, error, warning, info)
-│   └── Neutral / Grayscale
-│
-├── Typography Lib
-│   ├── 見出し (H1〜H6)
-│   ├── 本文 / キャプション
-│   └── フォントファミリー定義
-│
 ├── Icons Lib
 │   ├── ナビゲーション系
 │   ├── アクション系
@@ -39,22 +29,18 @@ Design System/
     └── レスポンシブブレークポイント
 ```
 
+※ カラー・タイポグラフィ等はネイティブ Design Tokens で管理。ライブラリファイルは不要。
+
 ## ライブラリ間の依存関係
 
 ```
-Colors Lib ──→ Typography Lib
-    │               │
-    └───────┬───────┘
-            ↓
-      Icons Lib ──→ UI Components Lib ──→ Layout Patterns Lib
+Icons Lib ──→ UI Components Lib ──→ Layout Patterns Lib
 ```
 
 接続ルール:
-- Colors Lib は他のすべてのLibから参照される基盤
-- Typography Lib は Colors Lib に依存
-- UI Components Lib は Colors, Typography, Icons に依存
+- カラー・タイポグラフィはネイティブ Design Tokens で各ファイルに直接定義（ライブラリ接続不要）
+- UI Components Lib は Icons に依存
 - Layout Patterns Lib は UI Components を含むテンプレート
-- **重要**: コンポーネントライブラリは必ずトークンライブラリ（Colors / Typography）を `linkLibrary` で接続すること。未接続だとトークン更新がコンポーネントに反映されない
 - `get-file-libraries` API は推移的依存も返すため、作業ファイルの一覧で同じライブラリが重複表示されることがあるが実害なし
 
 ## 分割の判断基準
@@ -72,14 +58,12 @@ Colors Lib ──→ Typography Lib
 
 ```
 Landing Page プロジェクト
-  ├── 接続: Colors Lib ✓
-  ├── 接続: Typography Lib ✓
+  ├── Design Tokens (ネイティブ)
   ├── 接続: UI Components Lib ✓
   └── 接続: Icons Lib ✗ (不要)
 
 管理画面プロジェクト
-  ├── 接続: Colors Lib ✓
-  ├── 接続: Typography Lib ✓
+  ├── Design Tokens (ネイティブ)
   ├── 接続: UI Components Lib ✓
   ├── 接続: Icons Lib ✓
   └── 接続: Layout Patterns Lib ✓
@@ -90,24 +74,6 @@ Landing Page プロジェクト
 ## MCP でのライブラリ操作
 
 MCP (`execute_code`) を使えば、ライブラリのアセット登録・取得をプログラム的に行える。
-
-### カラー登録
-
-```javascript
-const color = penpot.library.local.createColor();
-color.name = 'Design system / Colors / Primary / Blue 500';
-color.color = '#3B82F6';
-```
-
-### タイポグラフィ登録
-
-```javascript
-const typo = penpot.library.local.createTypography();
-typo.name = 'Design system / Typography / H1';
-typo.fontFamily = 'sourcesanspro';
-typo.fontSize = '32';
-typo.fontWeight = 'bold';
-```
 
 ### コンポーネント登録
 
@@ -121,77 +87,46 @@ comp.name = 'Button / Primary / Large';
 ```javascript
 const available = await penpot.library.availableLibraries();
 const lib = await penpot.library.connectLibrary(libraryId);
-const colors = lib.colors;  // 外部ライブラリのカラー取得
+const components = lib.components;  // 外部ライブラリのコンポーネント取得
 ```
 
 ### 既存ライブラリアセットの確認
 
 ```javascript
-// 登録済みカラー一覧
-const colors = penpot.library.local.colors;
-
-// 登録済みタイポグラフィ一覧
-const typographies = penpot.library.local.typographies;
-
 // 登録済みコンポーネント一覧
 const components = penpot.library.local.components;
 ```
 
-### REST API によるライブラリ分割・接続
+### REST API によるライブラリ管理
 
-`penpot-rest-api.js` を初期化すれば、ファイル作成からアセット登録・ライブラリ接続まで MCP で完結する。
+`penpot-rest-api.js` を初期化すれば、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
 
-#### ワークフロー（推奨: REST API 方式 — Plugin API・MCP 切断不要）
+#### ワークフロー
 
 ```
 1. REST API でライブラリファイルを作成 + 共有設定
-   storage.createFile(projectId, 'Colors Lib', { isShared: true })
+   storage.createFile(projectId, 'UI Components Lib', { isShared: true })
 
-2. execInFile で REST API 経由のアセット登録（update-file + add-color/add-typography チェンジ）
-   storage.execInFile(projectId, libFile.id, [
-     { type: 'createColor', name: '...', color: '#...' },
-     { type: 'createTypography', name: '...', fontFamily: 'sourcesanspro', fontSize: 32 },
-   ])
+2. openFile でライブラリファイルに切り替え → Plugin API でコンポーネント登録
 
 3. ライブラリ接続
    storage.linkLibrary(currentFileId, libFile.id)
 ```
 
-旧方式（openFile）との比較:
-- 旧: openFile → 再接続 → 再初期化 → Plugin API → openFile で戻る → 再接続 → 再初期化（計2回の再接続・再初期化）
-- 新: execInFile (REST API) 1回で完結（Plugin API 不要、MCP 切断・再接続不要）
-
 #### コード例
 
 ```javascript
 // 1. ライブラリファイル作成 + 共有化
-const libFile = await storage.createFile(projectId, 'Colors Lib', { isShared: true });
+const libFile = await storage.createFile(projectId, 'UI Components Lib', { isShared: true });
 
-// 2. カラー登録（REST API 経由、MCP 切断なし）
-await storage.registerColorsInFile(projectId, libFile.id, [
-  { name: 'Design system / Colors / Primary / Blue 500', color: '#3B82F6' },
-  { name: 'Design system / Colors / Primary / Blue 700', color: '#1D4ED8' },
-]);
+// 2. openFile でライブラリファイルに切り替え（MCP 再接続が発生）
+await storage.openFile(projectId, libFile.id);
+// → 再接続後、penpot-init.js + penpot-rest-api.js を再初期化
+// → Plugin API でコンポーネント登録
 
-// 3. タイポグラフィ登録（REST API 経由、MCP 切断なし）
-await storage.registerTypographiesInFile(projectId, libFile.id, [
-  { name: 'Design system / Typography / H1', fontFamily: 'sourcesanspro', fontSize: 32, fontWeight: 'bold' },
-]);
-
-// 4. 元ファイルにライブラリ接続
+// 3. 元ファイルにライブラリ接続
 await storage.linkLibrary(currentFileId, libFile.id);
 
-// 5. 接続済みライブラリ確認
+// 4. 接続済みライブラリ確認
 const linked = await storage.getFileLibraries(currentFileId);
 ```
-
-#### 技術詳細
-
-`execInFile` は内部で以下を行う:
-1. `get-file` API でファイル情報取得（`revn` + 既存アセット確認）
-2. operations を Penpot `update-file` の changes に変換（`add-color` / `add-typography`）
-3. `update-file` API でチェンジを一括送信
-
-name のスラッシュ区切り（例: `'Design system / Colors / Primary / Blue 500'`）は自動的に `path` と `name` に分離される（Penpot 内部は分離管理）。
-
-> **注意**: `execInFile` は REST API (`update-file`) を使用するため、Plugin API や MCP 接続は一切不要。カラー・タイポグラフィの登録に最適。コンポーネント登録など複雑な操作には Plugin API（`openFile` 方式）が必要。

@@ -82,7 +82,7 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 
 | ツール                   | MCP設定ファイル    | 備考                                                                              |
 | ------------------------ | ------------------ | --------------------------------------------------------------------------------- |
-| Claude Code(CLI)         | `.mcp.json`        | `npx mcp-remote` 経由で HTTP 接続                                                 |
+| Claude Code(CLI)         | `.mcp.json`        | Streamable HTTP で直接接続                                                         |
 | GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応 → [利用ガイド](.claude/skills/penpot/docs/github-copilot.md) |
 
 > Claude Code の [VS Code extension](https://code.claude.com/docs/en/vs-code#vs-code-extension-vs-claude-code-cli) を使う場合は `/penpot` でスキルを明示的に起動する必要がある。

@@ -99,22 +99,37 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 - `false` を省略すると新しいウィンドウが開き、MCP接続が切断される
 - 引数は `Page` オブジェクト: `penpotUtils.getPageById(id)` で取得
 
+## デザイントークン
+
+`penpot.library.local.tokens` (TokenCatalog) でネイティブ管理:
+
+- トークン概観: `penpotUtils.tokenOverview()`
+- トークン検索: `penpotUtils.findTokenByName(name)`
+- トークン適用: `shape.applyToken(token, ["fill"])`
+- セット管理: `catalog.addSet(name)` / `set.addToken(type, name, value)`
+- テーマ管理: `catalog.addTheme(group, name)`
+
+TokenType: `"color"` | `"dimension"` | `"spacing"` | `"typography"` | `"shadow"` |
+           `"opacity"` | `"borderRadius"` | `"borderWidth"` | `"fontWeights"` |
+           `"fontSizes"` | `"fontFamilies"` | `"letterSpacing"` | `"textDecoration"` |
+           `"textCase"`
+
+TokenProperty (`applyToken` 第2引数):
+  `"fill"`, `"stroke-color"`, `"r1"`-`"r4"`, `"shadow"`, `"opacity"`,
+  `"width"`, `"height"`, `"font-size"`, `"font-weight"`, `"font-families"`,
+  `"letter-spacing"`, `"line-height"`, `"rotation"`,
+  `"row-gap"`, `"column-gap"`, `"p1"`-`"p4"`, `"m1"`-`"m4"`,
+  `"stroke-width"`, `"text-case"`, `"text-decoration"`, `"typography"`
+
 ## ライブラリ
 
 ```javascript
 // ローカルライブラリ
 penpot.library.local           // Library
-penpot.library.local.colors    // LibraryColor[]
 penpot.library.local.components // LibraryComponent[]
-penpot.library.local.typographies // LibraryTypography[]
 
 // 接続済み外部ライブラリ
 penpot.library.connected       // Library[]
-
-// カラーをfill/strokeとして使用
-const color = penpot.library.local.colors.find(c => c.name === 'accent-blue');
-shape.fills = [color.asFill()];           // fillColorRefId が自動セット
-shape.strokes = [color.asStroke()];
 
 // コンポーネントのインスタンス化
 const comp = penpot.library.local.components.find(c => c.name === 'Button');
@@ -146,18 +161,9 @@ const instance = comp.instance();          // Shape を返す
 
 | チェンジタイプ | 用途 | 備考 |
 |---|---|---|
-| `add-color` | カラー追加 | |
-| `del-color` | カラー削除 | |
-| `add-typography` | タイポグラフィ追加 | |
-| `del-typography` | タイポグラフィ削除 | |
 | `del-component` | コンポーネント削除（ソフト） | ゴミ箱行き、復元可 |
 | `purge-component` | コンポーネント完全削除 | 復元不可 |
 | `del-page` | ページ削除 | Plugin API にページ削除なし |
-
-### クロスファイル操作
-- `storage.execInFile(projectId, fileId, operations)`: MCP切断なしで他ファイルにアセット登録
-- 便利メソッド: `registerColorsInFile()`, `registerTypographiesInFile()`
-- REST API (`update-file` の `add-color` / `add-typography` チェンジ) を使用
 
 ### ライブラリ管理
 - `createFile()` / `setFileShared()` / `linkLibrary()` / `unlinkLibrary()`

@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
-ARG PENPOT_REF=2.13.2
+ARG PENPOT_REF=develop
 ARG PENPOT_MCP_WEBSOCKET_URL=http://localhost:4402
 
 WORKDIR /build
@@ -33,11 +33,8 @@ RUN git clone --depth 1 --filter=blob:none --sparse \
 
 WORKDIR /build/mcp
 
-# Patch vite.config.ts to use the build-arg WebSocket URL
-RUN sed -i "s|let WS_URI = \"http://localhost:4402\"|let WS_URI = \"${PENPOT_MCP_WEBSOCKET_URL}\"|" \
-    packages/plugin/vite.config.ts
-
 # Install dependencies and build all packages (common -> server + plugin)
+# Note: PENPOT_MCP_WEBSOCKET_URL ARG is available as env var during build
 RUN pnpm install --frozen-lockfile && pnpm run build
 
 # =============================================================================
