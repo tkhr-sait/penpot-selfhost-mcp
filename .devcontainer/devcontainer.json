@@ -54,26 +54,51 @@
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
-  "forwardPorts": [9001, 4400, 4401, 4402],
+  "forwardPorts": [9001, 6006, 4400, 4401, 4402, 4410, 4411, 4412],
   "portsAttributes": {
     "9001": {
       "label": "penpot",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "6006": {
+      "label": "penpot-storybook",
+      "onAutoForward": "silent",
       "requireLocalPort": true
     },
     "4400": {
-      "label": "penpot-mcp-plugin",
+      "label": "mcp-claude-plugin",
+      "onAutoForward": "silent",
       "requireLocalPort": true
     },
     "4401": {
-      "label": "penpot-mcp-http",
+      "label": "mcp-claude-http",
+      "onAutoForward": "silent",
       "requireLocalPort": true
     },
     "4402": {
-      "label": "penpot-mcp-ws",
+      "label": "mcp-claude-ws",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "4410": {
+      "label": "mcp-copilot-plugin",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "4411": {
+      "label": "mcp-copilot-http",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "4412": {
+      "label": "mcp-copilot-ws",
+      "onAutoForward": "silent",
       "requireLocalPort": true
     },
     "8080": {
-      "onAutoForward": "ignore"
+      "onAutoForward": "ignore",
+      "requireLocalPort": true
     }
   },
   // Fix named volume ownership for devuser

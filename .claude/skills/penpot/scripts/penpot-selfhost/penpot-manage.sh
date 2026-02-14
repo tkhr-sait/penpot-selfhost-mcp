@@ -50,6 +50,9 @@ _show_mcp_info() {
   echo "               bash $0 logs penpot-mcp-connect-copilot"
   echo "  Reconnect:   bash $0 mcp-connect [claude|copilot|all]"
   echo ""
+  echo "Penpot Design System Storybook:"
+  echo "  URL: http://localhost:${PENPOT_STORYBOOK_PORT:-6006}"
+  echo ""
   echo "Reconnect MCP (client-side):"
   echo "  Claude Code:      /mcp -> penpot-official -> Reconnect"
   echo "  VS Code Copilot:  Ctrl+Shift+P -> 'MCP: List Servers' -> Restart"
@@ -426,14 +429,25 @@ cmd_mcp_connect() {
   esac
 }
 
+cmd_urls() {
+  local penpot_uri="${PENPOT_PUBLIC_URI:-http://localhost:${PENPOT_PORT:-9001}}"
+  local base
+  base=$(echo "$penpot_uri" | sed 's|\(https\?://[^:/]*\).*|\1|')
+  echo "Penpot:     $penpot_uri"
+  echo "Storybook:  ${base}:${PENPOT_STORYBOOK_PORT:-6006}"
+}
+
 cmd_help() {
+  local penpot_uri="${PENPOT_PUBLIC_URI:-http://localhost:${PENPOT_PORT:-9001}}"
+  local base
+  base=$(echo "$penpot_uri" | sed 's|\(https\?://[^:/]*\).*|\1|')
   cat <<EOF
 Penpot Self-Host Management
 
 Usage: $0 <command> [args]
 
 Commands:
-  up                    Start all services (incl. MCP server)
+  up                    Start all services (incl. MCP server + Storybook)
   down                  Stop all services
   restart               Restart all services
   status                Show service status and MCP connection info
@@ -442,10 +456,15 @@ Commands:
   setup [email] [pw] [name]  Quick setup with default profile (dev@example.com / devdev123)
   create-profile [e] [n] [p] Create a user profile (interactive if no args)
   mcp-connect [claude|copilot|all]  Auto-connect MCP plugin via headless Playwright
+  urls                  Show service URLs
   backup [dir]          Backup database and assets
   restore <db> [assets] Restore from backup files
   update [version]      Pull and update to a version (default: latest)
   help                  Show this help message
+
+Services:
+  Penpot UI:   $penpot_uri
+  Storybook:   ${base}:${PENPOT_STORYBOOK_PORT:-6006}
 EOF
 }
 
@@ -459,6 +478,7 @@ case "${1:-help}" in
   setup)          shift; cmd_setup "$@" ;;
   create-profile) shift; cmd_create_profile "$@" ;;
   mcp-connect)    shift; cmd_mcp_connect "$@" ;;
+  urls)           cmd_urls ;;
   backup)         shift; cmd_backup "$@" ;;
   restore)        shift; cmd_restore "$@" ;;
   update)         shift; cmd_update "$@" ;;

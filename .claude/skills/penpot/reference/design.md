@@ -32,16 +32,8 @@ Penpot MCP でのUI/UXデザイン作成に関するワークフロー、デザ�
 ### Phase 3: 実装
 
 Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作成する。
-実装時は [penpot-recipes.md](penpot-recipes.md) のユーティリティを初期化し、デザイン原則に基づいて作成する。
-
-**実装ルール:**
-- フォント: **`fontFamily: "sourcesanspro"` のみ使用**（セルフホスト固有）
-- スペーシング: 4px/8pxグリッドシステム（4, 8, 12, 16, 24, 32, 48, 64）
-- カラー: 既存のセマンティックカラートークン（ネイティブ Design Tokens）を優先使用
-- レイアウト: Flex/Gridレイアウトを積極活用
-- **ページ作成: `storage.createAndOpenPage(name)` 必須**（`createPage()` 単体は切替されない）
-- ページ切替: `penpot.openPage(page, false)` — 第2引数 `false` 必須
-- **API制約**: `high_level_overview` のシステムプロンプトを必ず遵守（insertChild、growType、Flex順序等）
+[penpot-init.js](../scripts/mcp-snippets/penpot-init.js) を Read → `mcp__penpot-official__execute_code` で初期化し、
+下記の「実装ルール」とデザイン原則に従って作成する。
 
 **大規模デザインの実装戦略:**
 - 一度のexecute_codeで全てを作ろうとしない
@@ -81,6 +73,43 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 - タブレット: 768px幅
 - デスクトップ: 1280px〜1440px幅
 - 指定がなければデスクトップ(1280px)をデフォルトとする
+
+## ベストプラクティス
+
+- **スラッシュ命名で階層化**: `Category / Subcategory / Name` でAssetsを自動グルーピング
+- **Shared Lib は読み取り専用**: 接続先からアセット編集不可。誤変更を防止
+- **空ボードもコンポーネントに**: レイアウトルールだけのボードも保存可能
+- **CSS Grid ネイティブサポート**: デザインとコードのレイアウトが完全一致
+
+## 実装ルール
+
+### フォント
+- **`fontFamily: "sourcesanspro"` のみ**（セルフホスト環境の唯一のビルトインフォント）
+
+### スペーシング
+- 4px/8px グリッドシステム（4, 8, 12, 16, 24, 32, 48, 64）
+
+### カラー・トークン
+- 既存のセマンティックカラートークン（下記）を優先使用
+
+### レイアウト
+- Flex/Grid レイアウトを積極活用
+
+### ページ管理
+- `storage.createAndOpenPage(name)` 必須（空の Page 1 自動再利用、切替忘れ防止）
+- 最低1ページ制約（最後のページは削除不可）
+- ページ切替: `penpot.openPage(page, false)` — 第2引数 `false` 必須
+- 複数ページ作業時は `storage.assertCurrentPage(page)` でシェイプ作成前に検証
+- プロトタイプ: インタラクションは同一ページ内のみ（異なるページ間は動作しない）
+
+### ライブラリ管理
+- カラー・タイポグラフィはネイティブ Design Tokens で管理（ライブラリファイル不要）
+- コンポーネントは共有ライブラリで管理
+- コンポーネント命名: `path` と `name` を個別に設定（スラッシュ記法の `name` 一括設定は path 二重化の原因）
+- 詳細は [mcp-api.md](mcp-api.md) と [library-architecture.md](library-architecture.md) を参照
+
+### API 制約
+- MCP システムプロンプト（`mcp__penpot-official__high_level_overview`）を必ず遵守（insertChild、growType、Flex順序等）
 
 ## セマンティックカラートークン
 

@@ -73,7 +73,7 @@ Landing Page プロジェクト
 
 ## MCP でのライブラリ操作
 
-MCP (`execute_code`) を使えば、ライブラリのアセット登録・取得をプログラム的に行える。
+MCP (`mcp__penpot-official__execute_code`) を使えば、ライブラリのアセット登録・取得をプログラム的に行える。
 
 ### コンポーネント登録
 

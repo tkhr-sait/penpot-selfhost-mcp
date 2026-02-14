@@ -1,8 +1,12 @@
-# IME入力時のコメント二重表示バグ — upstream修正メモ
+# IME入力時のバグ — upstream修正メモ
 
 ## 概要
 
-IME（日本語・中国語・韓国語等）有効時、コメント入力欄でEnterキーを押して変換を確定すると、テキストが二重に表示される。
+IME（日本語・中国語・韓国語等）に関連する2つの問題。
+
+### 問題1: コメント入力での二重表示
+
+IME有効時、コメント入力欄でEnterキーを押して変換を確定すると、テキストが二重に表示される。
 
 ```
 入力: あああ → Enter（確定）
@@ -11,8 +15,22 @@ IME（日本語・中国語・韓国語等）有効時、コメント入力欄�
       あああ
 ```
 
+### 問題2: キャンバス上テキスト編集時のクラッシュ（ABEND）
+
+キャンバス上のText要素をIMEで編集すると、ランタイムパッチ（`ime-fix.js`）がクラッシュし、連鎖的にテキストエディタライブラリの `resolveComposition` でも例外が発生する。
+
+```
+TypeError: parentClass.indexOf is not a function
+  at HTMLDocument.<anonymous> (ime-fix.js:71:25)
+
+Error: Minified exception occurred; ...
+  at Object.resolveComposition (libs.js:46:2767)
+```
+
+**原因**: SVG要素の `className` プロパティは文字列ではなく `SVGAnimatedString` オブジェクトを返す。パッチが `target.className.indexOf()` や `parent.className.indexOf()` を呼び出していたため `indexOf is not a function` でクラッシュ。このクラッシュがIME compositionの状態管理を破壊し、テキストエディタライブラリ側の `resolveComposition` エラーも誘発していた。
+
 **影響バージョン**: v2.13.2（それ以前も同様と推測）
-**影響コンポーネント**: コメント入力（ワークスペース・ビューア共通）
+**影響コンポーネント**: コメント入力（ワークスペース・ビューア共通）、キャンバス上テキスト編集
 
 ---
 
@@ -156,6 +174,48 @@ handle-key-down
 | `ui/components/forms.cljs` | `multi-input` | `on-key-down` で `kbd/enter?` 使用 |
 | `ui/components/editable_label.cljs` | `editable-label` | `on-key-up` で使用（影響小） |
 | `ui/components/color_input.cljs` | `color-input` | `handle-key-down` で使用 |
+| キャンバス テキスト編集 | text-editor (libs.js内) | テキストエディタライブラリ内部の `resolveComposition`。ランタイムパッチでの対処困難、upstream修正待ち |
+
+---
+
+## ランタイムパッチ: SVGAnimatedString クラッシュ修正
+
+### 修正日: 2026-02-14
+
+### 問題
+
+PenpotのキャンバスはSVGで描画される。SVG要素の `className` は HTML要素のような `string` ではなく `SVGAnimatedString` オブジェクトを返すため、`.indexOf()` メソッドが存在せずクラッシュする。
+
+```javascript
+// NG: SVG要素では className は SVGAnimatedString
+var cls = target.className || "";        // SVGAnimatedString オブジェクト
+cls.indexOf("comment-input");             // TypeError: indexOf is not a function
+
+var pc = parent.className || "";          // 同上
+pc.indexOf("comment");                    // TypeError
+```
+
+### 修正内容
+
+`getClassName()` ヘルパー関数を追加し、SVG/HTML両要素で安全にclass文字列を取得:
+
+```javascript
+function getClassName(el) {
+  if (!el) return "";
+  var cn = el.className;
+  if (typeof cn === "string") return cn;              // HTML要素
+  if (cn && typeof cn.baseVal === "string") return cn.baseVal;  // SVG要素
+  return el.getAttribute("class") || "";              // フォールバック
+}
+```
+
+`target.className` / `parent.className` の直接参照を全て `getClassName(target)` / `getClassName(parent)` に置換。
+
+### 確認結果
+
+- [x] キャンバス上テキスト編集でクラッシュしなくなった
+- [x] コメント入力欄のIME二重表示防止は引き続き動作
+- [ ] `resolveComposition` エラー（テキストエディタライブラリ内部）はパッチのクラッシュ連鎖が解消されたことで発生しなくなったが、ライブラリ自体のIMEハンドリングは別問題としてupstream修正待ち
 
 ---
 
@@ -168,6 +228,8 @@ handle-key-down
 - [ ] Ctrl+Enter送信が正常に動作する
 - [ ] メンション選択時のEnterが正常に動作する
 - [ ] Esc、矢印キー等の他のキーバインドに影響がない
+- [ ] キャンバス上のText要素をIME（日本語）で編集 → クラッシュしない
+- [ ] キャンバス上のText要素をIME無効で編集 → 通常通り動作する
 
 ### ブラウザ別の注意点
 
@@ -183,6 +245,13 @@ handle-key-down
 `.env` の `PENPOT_PATCH_IME_FIX=false` で無効化可能。  
 upstream修正後に `PENPOT_PATCH_IME_FIX=false` を設定して動作確認し、問題なければ `patches/` を削除。
 
+### パッチ変更履歴
+
+| 日付 | 変更内容 |
+|------|----------|
+| 初版 | コメント入力欄のIME二重表示防止パッチ作成 |
+| 2026-02-14 | SVGAnimatedString クラッシュ修正 — `getClassName()` ヘルパー追加 |
+
 ---
 
 ## 参考
@@ -190,3 +259,4 @@ upstream修正後に `PENPOT_PATCH_IME_FIX=false` を設定して動作確認し
 - [KeyboardEvent.isComposing (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/isComposing)
 - [CompositionEvent (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/CompositionEvent)
 - [W3C UI Events: Composition Event Order](https://www.w3.org/TR/uievents/#events-composition-event-order)
+- [SVGAnimatedString (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/SVGAnimatedString) — SVG要素の `className` が返すオブジェクト型

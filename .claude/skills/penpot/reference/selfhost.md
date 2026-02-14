@@ -15,6 +15,7 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | penpot-mcp-copilot | MCP Plugin Server (Copilot用) | 4410, 4411, 4412 |
 | penpot-mcp-connect-claude | MCP Auto-Connect + Bridge Server (Claude Code用) | (internal: 3000) |
 | penpot-mcp-connect-copilot | MCP Auto-Connect + Bridge Server (Copilot用) | (internal: 3000) |
+| penpot-storybook | Penpot Design System Storybook | 6006 |
 
 ### ポート構成
 
@@ -27,6 +28,7 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | 4410 | プラグイン静的ファイル配信 (Copilot) | `PENPOT_MCP_COPILOT_PLUGIN_PORT` |
 | 4411 | MCP HTTP/SSE エンドポイント (Copilot) | `PENPOT_MCP_COPILOT_HTTP_PORT` |
 | 4412 | WebSocket (Copilot) | `PENPOT_MCP_COPILOT_WS_PORT` |
+| 6006 | Penpot Design System Storybook | `PENPOT_STORYBOOK_PORT` |
 
 ### mcp-connect ブリッジサーバー
 
@@ -102,6 +104,15 @@ docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c "
 ```
 
 > 起動時に自動作成される3ユーザーはこれらの処理が自動で行われるため、手動操作は不要。
+
+## Claude Code / Copilot 並行運用
+
+Claude Code と GitHub Copilot はそれぞれ専用の MCP サーバーインスタンス・専用ユーザーで動作するため、**同時接続が可能**。特別な設定は不要。
+
+| AI ツール      | MCP HTTP ポート | 専用ユーザー               |
+| -------------- | --------------- | -------------------------- |
+| Claude Code    | 4401            | `mcp-claude@penpot.local`  |
+| GitHub Copilot | 4411            | `mcp-copilot@penpot.local` |
 
 ## MCP サーバー: Official Penpot MCP (Plugin-Based)
 
@@ -190,6 +201,11 @@ mcp-connect が使えない場合の手動手順（**MCP専用ユーザーでロ
 | `PENPOT_MCP_COPILOT_HTTP_PORT` | `4411` | MCP HTTP/SSE ポート |
 | `PENPOT_MCP_COPILOT_WS_PORT` | `4412` | WebSocket ポート |
 | `PENPOT_MCP_COPILOT_LOG_LEVEL` | `info` | ログレベル |
+
+### Storybook
+| 変数 | デフォルト | 説明 |
+|------|-----------|------|
+| `PENPOT_STORYBOOK_PORT` | `6006` | Storybook ポート |
 
 ## Docker 構成の特徴
 

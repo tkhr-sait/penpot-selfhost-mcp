@@ -55,8 +55,17 @@
       if (!target || !target.getAttribute) return;
       if (target.getAttribute("contenteditable") !== "true") return;
 
+      // Helper: safely get class string (SVG elements return SVGAnimatedString)
+      function getClassName(el) {
+        if (!el) return "";
+        var cn = el.className;
+        if (typeof cn === "string") return cn;
+        if (cn && typeof cn.baseVal === "string") return cn.baseVal;
+        return el.getAttribute("class") || "";
+      }
+
       // Match Penpot comment input (CSS-modules class contains "comment-input")
-      var cls = target.className || "";
+      var cls = getClassName(target);
       var isCommentInput =
         cls.indexOf("comment-input") !== -1 ||
         cls.indexOf("comment_input") !== -1;
@@ -64,7 +73,7 @@
       if (!isCommentInput) {
         var parent = target.parentElement;
         for (var i = 0; i < 5 && parent; i++) {
-          var pc = parent.className || "";
+          var pc = getClassName(parent);
           if (
             pc.indexOf("comment") !== -1 &&
             (pc.indexOf("form") !== -1 ||
