@@ -28,7 +28,7 @@
 フォント・テキストサイズ・growType の違反を自動検出。
 
 ### 一貫性チェック（拡張）
-- `penpotUtils.findTokenByName()` / `penpotUtils.tokenOverview()` でネイティブトークンと実使用色を突合 → 未登録カラー検出
+- `penpotUtils.findTokenByName()` （または `storage.findTokenOrNull()` ）/ `penpotUtils.tokenOverview()` でネイティブトークンと実使用色を突合 → 未登録カラー検出
 - `storage.spacing` の値で parentX/parentY を検証 → グリッド逸脱検出
 - `penpotUtils.analyzeDescendants()` でボード単位の制約検証
 

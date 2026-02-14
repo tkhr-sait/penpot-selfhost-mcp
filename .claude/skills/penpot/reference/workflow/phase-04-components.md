@@ -27,7 +27,7 @@
 `penpot-init.js` 初期化後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）に従い:
 
 1. `storage.createAndOpenPage('Components')` でコンポーネント展示ページ作成
-2. `penpotUtils.findTokenByName()` + `shape.applyToken(token, ['fill'])` でトークンカラー適用
+2. `storage.applyTokenSafe(shape, 'token-name', ['fill'])` でトークンカラー適用
 3. `storage.createText()` でコンポーネント内テキスト作成
 4. `storage.spacing` でパディング・マージン統一
 5. `penpot.library.local.createComponent(shapes)` でコンポーネント化

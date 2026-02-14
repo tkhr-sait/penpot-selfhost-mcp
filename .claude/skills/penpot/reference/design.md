@@ -113,7 +113,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ## セマンティックカラートークン
 
-ネイティブデザイントークンとして定義する14色。`penpotUtils.findTokenByName()` で検索し、`shape.applyToken()` で適用する。
+ネイティブデザイントークンとして定義する14色。`token-utils.js` 初期化後、`storage.applyTokenSafe()` で安全に適用する。
 
 | トークン | 用途 |
 |---------|------|
@@ -135,14 +135,14 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 ### トークン取得・適用
 
 ```javascript
-// トークン検索
-const token = penpotUtils.findTokenByName('accent-blue');
-
-// シェイプに適用
-shape.applyToken(token, ['fill']);
+// シェイプに適用（文字列名を直接指定、null チェック・互換性チェック付き）
+await storage.applyTokenSafe(shape, 'accent-blue', ['fill']);
 
 // ストロークに適用
-shape.applyToken(token, ['stroke-color']);
+await storage.applyTokenSafe(shape, 'accent-blue', ['stroke-color']);
+
+// 複数シェイプに一括適用
+await storage.applyTokenToShapesSafe('accent-blue', [shape1, shape2], ['fill']);
 
 // トークン一覧確認
 penpotUtils.tokenOverview();

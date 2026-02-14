@@ -38,7 +38,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 ```
 
 ### トークン→コード変換
-`penpotUtils.findTokenByName(name)` でトークン名から値を取得し、CSS カスタムプロパティや設計変数として出力。`penpotUtils.tokenOverview()` でトークン一覧を確認。
+`storage.findToken(name)` でトークン名から値を取得し（見つからなければ登録済みトークン名を含むエラー）、CSS カスタムプロパティや設計変数として出力。`penpotUtils.tokenOverview()` でトークン一覧を確認。
 
 ### デザイン仕様のプログラム抽出
 シェイプの fills/strokes/fontSize 等を `mcp__penpot-official__execute_code` で走査し、仕様書を自動生成。

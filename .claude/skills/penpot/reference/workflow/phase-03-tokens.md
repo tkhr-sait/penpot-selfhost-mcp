@@ -17,31 +17,30 @@
 
 ## MCP によるトークン一括登録
 
-`penpot-init.js` 初期化後:
+`penpot-init.js` + `token-utils.js` 初期化後:
 
 ### トークンの登録（ネイティブ API）
 
 ```javascript
-// トークンカタログ
-const catalog = penpot.library.local.tokens;
+// 冪等なセット取得/作成（同じスクリプトを2回実行しても安全）
+const { set } = await storage.ensureTokenSet('Semantic');
 
-// セット作成
-const set = catalog.addSet('Semantic');
-
-// カラートークン
-set.addToken('color', 'color.primary', '#3B82F6');
-set.addToken('color', 'color.error', '#EF4444');
+// カラートークン（冪等: 既存なら値を更新、同値ならスキップ）
+await storage.ensureToken(set, 'color', 'color.primary', '#3B82F6');
+await storage.ensureToken(set, 'color', 'color.error', '#EF4444');
 
 // スペーシングトークン
-set.addToken('spacing', 'spacing.sm', '8');
-set.addToken('spacing', 'spacing.md', '16');
+await storage.ensureToken(set, 'spacing', 'spacing.sm', '8');
+await storage.ensureToken(set, 'spacing', 'spacing.md', '16');
 
-// セット有効化
-if (!set.active) set.toggleActive();
+// 一括登録も可能
+await storage.ensureTokenBatch(set, [
+  { type: 'color', name: 'color.success', value: '#22C55E' },
+  { type: 'spacing', name: 'spacing.lg', value: '24' }
+]);
 
-// トークン適用
-const token = penpotUtils.findTokenByName('color.primary');
-shape.applyToken(token, ['fill']);
+// トークン適用（文字列名を直接指定、null チェック・互換性チェック付き）
+await storage.applyTokenSafe(shape, 'color.primary', ['fill']);
 
 // 概観確認
 penpotUtils.tokenOverview();

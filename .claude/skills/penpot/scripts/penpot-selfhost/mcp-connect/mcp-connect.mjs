@@ -65,6 +65,8 @@ const NAV_TIMEOUT = 30_000;
 const PLUGIN_ACTION_TIMEOUT = 15_000;
 const LOGIN_RETRY_INTERVAL = 5000;
 const LOGIN_RETRY_TIMEOUT = 300_000;
+const MONITOR_INTERVAL = 5000;       // Plugin connection check interval
+const RECONNECT_COOLDOWN = 15000;    // Cooldown after reconnect
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -162,7 +164,7 @@ async function main() {
 
     // 7. Keep alive — block until browser disconnects or Ctrl+C
     log("MCP connected. Browser will stay open. Press Ctrl+C to exit.");
-    await keepAlive(browser);
+    await keepAlive(browser, page);
   } catch (err) {
     console.error("Error:", err.message);
     // Save debug artifacts on failure
@@ -186,9 +188,7 @@ async function login(page) {
     attempt++;
     log(`Login attempt #${attempt} ...`);
     try {
-      await page.goto(`${PENPOT_URI}/#/auth/login`, { waitUntil: "domcontentloaded" });
-      // Wait for SPA to bootstrap
-      await sleep(2000);
+      await page.goto(`${PENPOT_URI}/#/auth/login`, { waitUntil: "networkidle" });
 
       // Email field
       const emailInput = page.locator('input[type="email"], input[id="email"]');
@@ -508,6 +508,48 @@ async function verifyConnection(page) {
 // HTTP Bridge Server (REST API proxy + file navigation for execute_code)
 // ---------------------------------------------------------------------------
 let navigationStatus = "ready";
+let lastReconnectTime = 0;
+
+/**
+ * Check if the MCP plugin is connected by inspecting the iframe status element.
+ */
+async function checkPluginConnected(page) {
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    try {
+      const statusEl = frame.locator("#connection-status");
+      const text = await statusEl.textContent({ timeout: 2000 });
+      if (text && text.toLowerCase().includes("connected")) return true;
+    } catch { /* frame not available */ }
+  }
+  return false;
+}
+
+/**
+ * Periodically check plugin connection and auto-reconnect if disconnected.
+ */
+function startConnectionMonitor(page) {
+  setInterval(async () => {
+    if (navigationStatus !== "ready") return;
+    if (Date.now() - lastReconnectTime < RECONNECT_COOLDOWN) return;
+
+    try {
+      const connected = await checkPluginConnected(page);
+      if (!connected) {
+        log("[monitor] Plugin disconnected. Auto-reconnecting ...");
+        lastReconnectTime = Date.now();
+        await reconnectPlugin(page);
+        // If reconnect failed (status="error"), reset to "ready" so monitor can retry
+        if (navigationStatus === "error") {
+          navigationStatus = "ready";
+          log("[monitor] Will retry on next interval.");
+        }
+      }
+    } catch (e) {
+      log(`[monitor] Check error: ${e.message}`);
+    }
+  }, MONITOR_INTERVAL);
+}
 
 /**
  * Reconnect the MCP plugin after navigating to a different file.
@@ -517,12 +559,34 @@ async function reconnectPlugin(page) {
   navigationStatus = "reconnecting";
   log("[nav] Reconnecting MCP plugin ...");
   try {
-    // Open Plugin Manager
     const pluginManagerModal = page.locator('[class*="plugin-management"]');
+    let managerOpened = false;
+
+    // Strategy 1: Try keyboard shortcut (fast path)
+    await page.keyboard.press("Escape");
+    await sleep(500);
+    const viewport = page.locator('[class*="viewport"]').first();
+    await viewport.click({ force: true, timeout: 5000 }).catch(() => {});
+    await sleep(300);
 
     await page.keyboard.press("Control+Alt+KeyP");
-    await sleep(1000);
-    await pluginManagerModal.waitFor({ state: "visible", timeout: PLUGIN_ACTION_TIMEOUT });
+    managerOpened = await pluginManagerModal.waitFor({ state: "visible", timeout: 5000 })
+      .then(() => true).catch(() => false);
+
+    // Strategy 2: Reload page to get clean state (reliable fallback)
+    if (!managerOpened) {
+      log("[nav] Shortcut failed, reloading page ...");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT });
+      await page.waitForSelector('[class*="viewport"]', {
+        state: "visible",
+        timeout: NAV_TIMEOUT,
+      });
+      await sleep(1000);
+
+      await page.keyboard.press("Control+Alt+KeyP");
+      await sleep(1000);
+      await pluginManagerModal.waitFor({ state: "visible", timeout: PLUGIN_ACTION_TIMEOUT });
+    }
 
     // Open the MCP plugin (applies SES workaround + clicks Open)
     await openMcpPlugin(page, pluginManagerModal);
@@ -696,7 +760,8 @@ function startBridgeServer(page) {
 // ---------------------------------------------------------------------------
 // Step 10: Keep alive
 // ---------------------------------------------------------------------------
-async function keepAlive(browser) {
+async function keepAlive(browser, page) {
+  startConnectionMonitor(page);
   return new Promise((resolve) => {
     // Exit with error on unexpected disconnect so container restarts
     browser.on("disconnected", () => {

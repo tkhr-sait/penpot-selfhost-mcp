@@ -32,9 +32,9 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 |---|---|---|
 | なし / 起動 / 設定 / 利用可能にして | [環境セットアップ](#環境セットアップ) | [selfhost.md](reference/selfhost.md) |
 | 停止 / down / status / ログ | 環境セットアップ（コマンド実行） | — |
-| DS構築 / トークン定義 | [デザインシステム構築](#デザインシステム構築) | [mcp-api.md](reference/mcp-api.md), [penpot-init.js](scripts/mcp-snippets/penpot-init.js), [design.md](reference/design.md) + フェーズ誘導で該当ファイル |
+| DS構築 / トークン定義 | [デザインシステム構築](#デザインシステム構築) | [mcp-api.md](reference/mcp-api.md), [penpot-init.js](scripts/mcp-snippets/penpot-init.js), [token-utils.js](scripts/mcp-snippets/token-utils.js), [design.md](reference/design.md) + フェーズ誘導で該当ファイル |
 | コンポーネント / ライブラリ | DS構築（Phase 04-05） | [mcp-api.md](reference/mcp-api.md), [penpot-init.js](scripts/mcp-snippets/penpot-init.js), [design.md](reference/design.md), [workflow/phase-04](reference/workflow/phase-04-components.md) or [05](reference/workflow/phase-05-library.md), [library-architecture.md](reference/library-architecture.md), [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) |
-| デザイン / 画面 / UI | [デザイン作成](#デザイン作成) | [mcp-api.md](reference/mcp-api.md), [penpot-init.js](scripts/mcp-snippets/penpot-init.js), [design.md](reference/design.md) |
+| デザイン / 画面 / UI | [デザイン作成](#デザイン作成) | [mcp-api.md](reference/mcp-api.md), [penpot-init.js](scripts/mcp-snippets/penpot-init.js), [token-utils.js](scripts/mcp-snippets/token-utils.js), [design.md](reference/design.md) |
 | トークン同期 / DTCG | [外部パイプライン](#外部パイプライン)（01） | [mcp-api.md](reference/mcp-api.md), [pipeline/01-token-sync.md](reference/pipeline/01-token-sync.md), [token-sync.js](scripts/mcp-snippets/token-sync.js) |
 | SD / CSS変数 / SCSS | 外部パイプライン（02） | [pipeline/02-style-dictionary.md](reference/pipeline/02-style-dictionary.md) |
 | Storybook | 外部パイプライン（03） | [pipeline/03-storybook.md](reference/pipeline/03-storybook.md) |
@@ -48,7 +48,7 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 
 **リファレンス**: [selfhost.md](reference/selfhost.md) | [mcp-api.md](reference/mcp-api.md) | [comments.md](reference/comments.md) | [design.md](reference/design.md) | [workflow/phase-01〜08](reference/workflow/) | [library-architecture.md](reference/library-architecture.md) | [pipeline/overview + 01〜05](reference/pipeline/)
 
-**スクリプト**: [penpot-manage.sh](scripts/penpot-selfhost/penpot-manage.sh) | [penpot-init.js](scripts/mcp-snippets/penpot-init.js) | [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) | [validate-design.js](scripts/mcp-snippets/validate-design.js) | [token-sync.js](scripts/mcp-snippets/token-sync.js)
+**スクリプト**: [penpot-manage.sh](scripts/penpot-selfhost/penpot-manage.sh) | [penpot-init.js](scripts/mcp-snippets/penpot-init.js) | [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) | [validate-design.js](scripts/mcp-snippets/validate-design.js) | [token-sync.js](scripts/mcp-snippets/token-sync.js) | [token-utils.js](scripts/mcp-snippets/token-utils.js)
 
 ---
 
@@ -82,7 +82,7 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 全フェーズ共通で `penpot-init.js` を最初に `mcp__penpot-official__execute_code` で初期化する。
 
 **フェーズ判定**（キーワードが曖昧な場合）: `mcp__penpot-official__execute_code` で状態確認
-- `penpot.library.local.tokens.sets.length` = 0 → Phase 01 or 03 から
+- `(penpot.library.local.tokens?.sets?.length ?? 0)` = 0 → Phase 01 or 03 から
 - トークンあり + `penpot.library.local.components.length` = 0 → Phase 04 から
 - コンポーネントあり + `penpot.library.connected.length` = 0 → Phase 05 から
 - 全あり → Phase 07 or 08
@@ -95,7 +95,7 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 - 「コード連携」→ [phase-07-handoff.md](reference/workflow/phase-07-handoff.md)
 - 「運用ルール」→ [phase-08-maintenance.md](reference/workflow/phase-08-maintenance.md)
 
-**追加スクリプト**: Phase 01/08 監査 → [validate-design.js](scripts/mcp-snippets/validate-design.js) / Phase 03 トークン import/export → [token-sync.js](scripts/mcp-snippets/token-sync.js)
+**追加スクリプト**: Phase 01/08 監査 → [validate-design.js](scripts/mcp-snippets/validate-design.js) / Phase 03 トークン定義 → [token-utils.js](scripts/mcp-snippets/token-utils.js) / Phase 03 トークン import/export → [token-sync.js](scripts/mcp-snippets/token-sync.js)
 
 ---
 
