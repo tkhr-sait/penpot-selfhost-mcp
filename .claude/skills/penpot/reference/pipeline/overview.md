@@ -13,9 +13,9 @@ Penpot（トークン定義・UIデザイン）
    │
    ↓
 Style Dictionary（変換）
-   ├── CSS 変数 / SCSS
-   ├── Tailwind config
-   └── iOS / Android（必要なら）
+   ├── CSS 変数 (build/css/variables.css)
+   ├── SCSS（必要なら）
+   └── Tailwind config（必要なら）
    │
    ↓
 Storybook（コンポーネント開発・カタログ）
@@ -24,6 +24,44 @@ Lost Pixel（ビジュアルリグレッションテスト）
    ↓
 ドキュメントサイト（Astro Starlight）
 ```
+
+## 実ディレクトリ構成
+
+```
+(project root)
+├── tokens/                          ← Penpot エクスポート先（DTCG JSON）
+│   └── core/
+│       ├── color.json
+│       ├── spacing.json
+│       ├── sizing.json
+│       ├── typography.json
+│       └── border.json
+├── build/                           ← Style Dictionary 出力
+│   └── css/
+│       └── variables.css            ← CSS カスタムプロパティ (--ds-*)
+├── stories/                         ← Storybook ストーリー
+│   ├── Button.jsx / .css / .stories.js
+│   ├── Input.jsx / .css / .stories.js
+│   └── ...
+├── .storybook/
+│   ├── main.js
+│   └── preview.js                   ← import '../build/css/variables.css'
+├── storybook-static/                ← Storybook ビルド出力 → Docker マウント
+├── style-dictionary.config.js
+├── package.json
+└── vitest.config.js
+```
+
+`.storybook/preview.js` で `build/css/variables.css` をインポートすることで、Storybook 内のコンポーネントがトークン由来の CSS 変数を利用できる。
+
+## npm スクリプト一覧
+
+| スクリプト | コマンド | 説明 |
+|-----------|---------|------|
+| `tokens:build` | `style-dictionary build --config style-dictionary.config.js` | トークン → CSS 変数 |
+| `storybook` | `storybook dev -p 6007` | Storybook dev サーバー |
+| `storybook:build` | `storybook build` | Storybook 静的ビルド |
+| `storybook:deploy` | `npm run tokens:build && npm run storybook:build` | 一括ビルド |
 
 ## パイプライン一覧
 
@@ -40,9 +78,10 @@ Lost Pixel（ビジュアルリグレッションテスト）
 | 操作 | ツール | 説明 |
 |------|--------|------|
 | トークンエクスポート | `mcp__penpot-official__execute_code` → `storage.exportTokensDTCG()` | Penpot → DTCG JSON |
-| トークンインポート | `mcp__penpot-official__execute_code` → `storage.importTokensDTCG(json)` | JSON → Penpot |
+| トークンインポート | `mcp__penpot-official__execute_code` → `await storage.importTokensDTCG(json)` | JSON → Penpot（バッチ処理） |
+| インポート再開 | `mcp__penpot-official__execute_code` → `await storage.resumeImport()` | 中断からの再開 |
 | SD 設定生成 | `mcp__penpot-official__execute_code` → `storage.generateStyleDictionaryConfig()` | Style Dictionary 設定テンプレート |
-| SD ビルド | Bash → `npx style-dictionary build` | CSS変数/SCSS/Tailwind 生成 |
+| SD ビルド | Bash → `npm run tokens:build` | CSS変数/SCSS/Tailwind 生成 |
 | コンポーネント一覧 | `mcp__penpot-official__execute_code` → `penpot.library.local.components` | Storybook スキャフォールド用 |
 
 事前に `token-sync.js` を Read → `mcp__penpot-official__execute_code` で初期化すること。

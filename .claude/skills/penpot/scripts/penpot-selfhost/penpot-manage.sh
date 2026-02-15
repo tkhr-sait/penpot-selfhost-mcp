@@ -19,6 +19,20 @@ dc() {
   docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 
+# Storybook profile 判定: storybook-static/ が存在すれば --profile storybook を返す
+_storybook_profile_args() {
+  local storybook_dir="${PENPOT_STORYBOOK_DIR:-../../../../../storybook-static}"
+  local storybook_resolved
+  if [[ "$storybook_dir" = /* ]]; then
+    storybook_resolved="$storybook_dir"
+  else
+    storybook_resolved="$SCRIPT_DIR/$storybook_dir"
+  fi
+  if [ -d "$storybook_resolved" ]; then
+    echo "--profile storybook"
+  fi
+}
+
 _run_penpot_api() {
   docker exec $CT_MCP_CONNECT_CLAUDE \
     node /app/penpot-api.mjs --uri "http://penpot-frontend:8080" "$@"
@@ -76,7 +90,15 @@ cmd_up() {
     echo "Building MCP Copilot auto-connect image (first run, may take a few minutes)..."
     dc build penpot-mcp-connect-copilot
   fi
-  dc up -d
+  local sb_profile
+  sb_profile=$(_storybook_profile_args)
+  if [ -n "$sb_profile" ]; then
+    echo "Storybook: 配信します"
+  else
+    echo "Info: storybook-static/ が見つかりません。Storybook コンテナはスキップ。"
+    echo "  生成: npm run storybook:build → 再度 up で起動"
+  fi
+  dc up -d $sb_profile
   echo "Penpot is running at ${PENPOT_PUBLIC_URI:-http://localhost:9001}"
   echo ""
 
@@ -303,7 +325,9 @@ cmd_down() {
 }
 
 cmd_status() {
-  dc ps
+  local sb_profile
+  sb_profile=$(_storybook_profile_args)
+  dc $sb_profile ps
   echo ""
   # Show MCP connection info if any MCP container is running
   if dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp; then
@@ -430,7 +454,9 @@ cmd_restore() {
 }
 
 cmd_restart() {
-  dc restart
+  local sb_profile
+  sb_profile=$(_storybook_profile_args)
+  dc up -d --force-recreate $sb_profile
 }
 
 cmd_update() {

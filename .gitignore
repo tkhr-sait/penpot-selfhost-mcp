@@ -1,2 +1,5 @@
 .claude/settings.local.json
 node_modules/
+
+*storybook.log
+storybook-static

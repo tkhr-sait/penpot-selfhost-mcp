@@ -137,5 +137,5 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 
 - `mcp__penpot-official__high_level_overview` のシステムプロンプト遵守（insertChild、growType、Flex順序等）
 - Plugin API `remove()` はコンポーネント削除に非永続 → REST API (`del-component` / `purge-component`)
-- Plugin API 大量操作は WebSocket 切断リスク → REST API 優先
+- Plugin API 大量操作は WebSocket 切断リスク → バッチ分割 + sleep（token-sync.js 参照）または REST API で対処。切断しても MCP 再接続は不要（自動復帰）
 - 完了後の検証: [validate-design.js](scripts/mcp-snippets/validate-design.js) で制約違反を検出

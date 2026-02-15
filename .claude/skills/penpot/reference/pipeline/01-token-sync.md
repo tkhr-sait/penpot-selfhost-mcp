@@ -23,27 +23,68 @@ Penpot のデザイントークンと リポジトリの JSON ファイルを双
 const json = storage.exportTokensDTCG();
 // → Claude Code の Write ツールで tokens/ 配下に保存
 
-// インポート: JSON → Penpot
+// インポート: JSON → Penpot（async、バッチ分割で安定実行）
 const jsonString = '...'; // Read ツールで tokens/ 配下のファイルを読み込み
-storage.importTokensDTCG(jsonString);
+const stats = await storage.importTokensDTCG(jsonString);
+
+// 中断後の再開（WebSocket 切断時など）
+const stats = await storage.resumeImport();
 ```
 
 ## リポジトリ構成
 
 ```
 tokens/
-├── core/
-│   └── 01-base/
-│       ├── color.json
-│       ├── spacing.json
-│       └── typography.json
-└── semantic/
-    ├── 01-base/
-    │   └── color.json
-    ├── 02-light/
-    │   └── color.json
-    └── 03-dark/
-        └── color.json
+└── core/
+    ├── color.json
+    ├── spacing.json
+    ├── sizing.json
+    ├── typography.json
+    └── border.json
 ```
 
-フォルダの番号プレフィックス（01-、02- 等）は Penpot のカスケード順序を制御するために重要。後から読み込まれたセットが同名トークンを上書きする。
+トークン JSON はセットごとにファイル分割し `tokens/core/` 直下にフラット配置する。
+フォルダの番号プレフィックス（01-、02- 等）でカスケード順序を制御する場合は、Penpot のセット読み込み順と一致させること。
+
+## DTCG 変換ルール
+
+`exportTokensDTCG()` が自動処理する変換:
+
+| Penpot トークン型 | DTCG $type | 値の変換 |
+|---|---|---|
+| `dimension`, `spacing`, `sizing`, `borderRadius`, `borderWidth`, `fontSizes`, `letterSpacing` | `dimension` | 単位なし数値に `px` を自動付与（`"13"` → `"13px"`） |
+| `fontFamilies` | `fontFamily` | CSS 互換文字列に変換（`"Source Sans Pro, sans-serif"` 等） |
+| `opacity`, `fontWeights`, `number`, `rotation` | `number` / `fontWeight` | 単位なし数値のまま |
+| `color` | `color` | そのまま |
+| `textCase`, `textDecoration` | `string` | そのまま |
+
+## 既知問題と対処
+
+### fontFamilies の ClojureScript PersistentVector 問題
+
+Penpot 内部で `fontFamilies` トークンの `value` が ClojureScript の PersistentVector（`$tail$` 等のキーを持つオブジェクト）として返されることがある。
+
+**対処**: `token-sync.js` の `exportTokensDTCG()` で自動変換済み:
+1. `fontNameMap` のマッピングテーブルで CSS 名に変換
+2. `token.resolvedValue` を試行
+3. PersistentVector の `$tail$` 配列から文字列を抽出
+4. フォールバック: `token.value` をそのまま出力
+
+### `addSet()` 戻り値のプロパティ即時読取不可
+
+`catalog.addSet(name)` の戻り値は、プロパティ（`name`, `active` 等）を即時読み取れない場合がある。
+
+**対処**: `catalog.sets.find(s => s.name === setName)` で再取得する。
+
+### 大量トークン作成時の WebSocket 切断
+
+トークンを一括作成すると Plugin API の操作が UI 更新をトリガーし、WebSocket が切断されることがある。
+
+**対処**: `importTokensDTCG()` は 10 件ごとのバッチに分割し、各バッチ間に 200ms の sleep を挿入。切断が発生した場合は `storage.resumeImport()` で途中から再開可能。**MCP 再接続は不要**（自動復帰する）。
+
+### インポートの再開手順
+
+1. `importTokensDTCG()` が途中で失敗
+2. `storage._importProgress` に進捗が保存されている
+3. `execute_code` を再呼び出しし `await storage.resumeImport()` で残りを処理
+4. 再開時は既存トークンとの重複チェックで冪等性を保証

@@ -228,12 +228,16 @@ services:
     networks:
       - penpot
 
-  # Penpot Design System Storybook
+  # Project Storybook (serves built storybook-static from workspace root)
+  # profile: storybook — デフォルト起動から除外。storybook-static/ 存在時のみ起動
   penpot-storybook:
     image: penpotapp/storybook:${PENPOT_VERSION:-2.13.2}
+    profiles: [storybook]
     restart: unless-stopped
     ports:
       - "${PENPOT_STORYBOOK_PORT:-6006}:8080"
+    volumes:
+      - ${PENPOT_STORYBOOK_DIR:-../../../../../storybook-static}:/var/www:ro
     environment:
       <<: *locale
     networks:
