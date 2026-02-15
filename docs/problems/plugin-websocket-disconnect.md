@@ -66,7 +66,7 @@ Penpot のプラグインシステムは iframe + WebSocket ベース。
 `token-utils.js` の各操作関数に sleep を挿入し、同一 `execute_code` 内での連続操作の安定性を確保。
 
 ```javascript
-// ensureTokenSet: セット作成/有効化後に sleep
+// ensureTokenSet: セット作成/有効化後に sleep + addSet() 再取得
 storage.ensureTokenSet = async (name, opts) => {
   const catalog = penpot.library.local.tokens;
   let set = catalog.sets.find(s => s.name === name);
@@ -77,8 +77,10 @@ storage.ensureTokenSet = async (name, opts) => {
     }
     return { set, created: false };
   }
-  set = catalog.addSet(name);
+  catalog.addSet(name);
   await sleep(100);       // ← UI 更新待ち
+  // addSet() 戻り値のプロパティ即時読取不可 → catalog.sets から再取得
+  set = catalog.sets.find(s => s.name === name);
   // ...
 };
 
@@ -97,13 +99,17 @@ storage.applyTokenSafe = async (shape, tokenOrName, properties) => {
   await sleep(100);       // ← 非同期反映待ち
 };
 
-// ensureTokenBatch: 10件ごとに追加 sleep
+// ensureTokenBatch: 10件ごとに追加 sleep（importTokensDTCG と統一）
 storage.ensureTokenBatch = async (set, tokens) => {
   for (let i = 0; i < tokens.length; i++) {
     await storage.ensureToken(set, ...);
-    if ((i + 1) % 10 === 0) await sleep(50);  // ← バースト緩和
+    if ((i + 1) % 10 === 0) await sleep(200); // ← バースト緩和（バッチ間 sleep と統一）
   }
 };
+
+// importTokensDTCG: 個別トークン操作にも sleep を挿入
+// addSet/toggleActive 後: 100ms、addToken/value 更新後: 50ms
+// バッチ間: 200ms（既存通り）
 ```
 
 ### sleep 値の選定
@@ -111,9 +117,11 @@ storage.ensureTokenBatch = async (set, tokens) => {
 | 操作 | sleep | 理由 |
 |------|-------|------|
 | `addSet` / `toggleActive` | 100ms | セット構造の変更は UI 変更が大きい |
-| `addToken` / `value` 更新 | 50ms | 個別トークンの変更は比較的軽い |
+| `addToken` / トークン更新 | 50ms | 個別トークンの変更は比較的軽い（`value` は読み取り専用のため remove + addToken） |
 | `applyToken` | 100ms | シェイプ再描画 + トークンバインディング反映 |
-| バッチ 10件ごと | 50ms | 連続操作のバースト緩和 |
+| バッチ 10件ごと | 200ms | 連続操作のバースト緩和（`importTokensDTCG` と統一） |
+
+**注**: `importTokensDTCG` でも個別の `addToken` / `value` 更新後に 50ms の sleep を挿入し、10件が一気に発火する問題を解消。
 
 ## 対策2: mcp-connect.mjs の自動再接続（execute_code 間の復旧）
 

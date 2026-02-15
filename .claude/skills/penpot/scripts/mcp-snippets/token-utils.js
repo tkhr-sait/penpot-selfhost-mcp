@@ -83,8 +83,10 @@ storage.ensureTokenSet = async (name, opts) => {
     }
     return { set, created: false };
   }
-  set = catalog.addSet(name);
+  catalog.addSet(name);
   await sleep(100);
+  // addSet() 戻り値のプロパティ即時読取不可 → catalog.sets から再取得
+  set = catalog.sets.find(s => s.name === name);
   if (activate && !set.active) {
     set.toggleActive();
     await sleep(100);
@@ -110,10 +112,12 @@ storage.ensureToken = async (set, type, name, value, opts) => {
     if (String(existing.value) === String(value)) {
       return { token: existing, action: 'found' };
     }
-    // 値が異なれば更新
-    existing.value = value;
+    // 値が異なれば更新（value は読み取り専用 → remove + addToken）
+    existing.remove();
     await sleep(50);
-    return { token: existing, action: 'updated' };
+    const updated = set.addToken(type, name, String(value));
+    await sleep(50);
+    return { token: updated, action: 'updated' };
   }
   // 新規作成
   const token = set.addToken(type, name, String(value));
@@ -135,9 +139,9 @@ storage.ensureTokenBatch = async (set, tokens) => {
     } catch (e) {
       errors.push({ name, error: e.message });
     }
-    // 10件ごとに追加 sleep でバースト緩和
+    // 10件ごとに追加 sleep でバースト緩和（importTokensDTCG のバッチ間 sleep と統一）
     if ((i + 1) % 10 === 0) {
-      await sleep(50);
+      await sleep(200);
     }
   }
   return { results, errors };

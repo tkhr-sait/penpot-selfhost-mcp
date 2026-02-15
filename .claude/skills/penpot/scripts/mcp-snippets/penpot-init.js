@@ -87,7 +87,7 @@ storage.getFileComments = async () => {
     penpot.openPage(page, false);
     await new Promise(r => setTimeout(r, 100));
     const threads = await penpot.currentPage.findCommentThreads({
-      onlyActive: true, showResolved: false
+      onlyYours: false, showResolved: false
     });
     if (threads.length > 0) {
       const threadData = [];

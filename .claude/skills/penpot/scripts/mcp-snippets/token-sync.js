@@ -8,6 +8,8 @@
 //           storage.generateStyleDictionaryConfig
 // ============================================================
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 // --- Export: Penpot → W3C DTCG JSON ---
 
 storage.exportTokensDTCG = () => {
@@ -46,6 +48,13 @@ storage.exportTokensDTCG = () => {
     typography: 'typography',
     shadow: 'shadow'
   };
+
+  // DTCG $type が Penpot 型と異なるもの（$extensions 保存対象）
+  const needsExtension = new Set([
+    'spacing', 'sizing', 'borderRadius', 'borderWidth',
+    'fontSizes', 'letterSpacing', 'rotation', 'opacity',
+    'textCase', 'textDecoration'
+  ]);
 
   // fontFamilies 値の解決: PersistentVector 等の内部構造を CSS 互換文字列に変換
   const resolveFontFamily = (token) => {
@@ -117,6 +126,10 @@ storage.exportTokensDTCG = () => {
       if (token.description) {
         entry.$description = token.description;
       }
+      // DTCG $type から Penpot 元型を復元できない場合、$extensions に保存
+      if (needsExtension.has(token.type)) {
+        entry.$extensions = { 'com.penpot': { type: token.type } };
+      }
       current[leaf] = entry;
     }
     dtcg[tokenSet.name] = setObj;
@@ -127,7 +140,7 @@ storage.exportTokensDTCG = () => {
     dtcg.$themes = themes.map(theme => ({
       name: theme.name,
       group: theme.group,
-      sets: theme.sets.map(s => s.name)
+      sets: (theme.activeSets || []).map(s => s.name)
     }));
   }
 
@@ -155,10 +168,13 @@ const _flattenDTCG = (obj, prefix) => {
     if (key.startsWith('$')) continue;
     const fullName = prefix ? `${prefix}.${key}` : key;
     if (val && typeof val === 'object' && val.$value !== undefined) {
+      // $extensions から Penpot 元型を抽出（あれば）
+      const penpotType = val.$extensions?.['com.penpot']?.type || null;
       result.push({
         name: fullName,
         value: typeof val.$value === 'object' ? JSON.stringify(val.$value) : String(val.$value),
         type: val.$type,
+        penpotType,
         description: val.$description || ''
       });
     } else if (val && typeof val === 'object') {
@@ -171,21 +187,23 @@ const _flattenDTCG = (obj, prefix) => {
 // バッチサイズ・sleep 設定
 const IMPORT_BATCH_SIZE = 10;
 const IMPORT_BATCH_SLEEP_MS = 200;
+const IMPORT_SET_OP_SLEEP_MS = 100;   // addSet, toggleActive 後
+const IMPORT_TOKEN_OP_SLEEP_MS = 50;  // addToken, value 更新後
 
-storage.importTokensDTCG = async (jsonString) => {
-  const dtcg = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+// --- 内部関数: セット準備とトークンバッチ処理 ---
+
+// セットの取得/作成・有効化、フラットトークンリスト生成
+// 戻り値: { allBatchItems, existingSets, existingTokensBySet, stats }
+const _prepareSets = async (dtcg, stats) => {
   const catalog = penpot.library.local.tokens;
-
-  // Build existing set lookup
   const existingSets = {};
   for (const s of catalog.sets) {
     existingSets[s.name] = s;
   }
 
-  const stats = { setsCreated: 0, setsUpdated: 0, tokensCreated: 0, tokensUpdated: 0 };
-
-  // 全セットのフラットトークンを準備（セット名付き）
   const allBatchItems = [];
+  // セットごとの既存トークンマップを事前構築（O(n) で済む + 重複作成防止）
+  const existingTokensBySet = {};
 
   for (const [setName, setData] of Object.entries(dtcg)) {
     if (setName.startsWith('$')) continue;
@@ -194,7 +212,8 @@ storage.importTokensDTCG = async (jsonString) => {
     let tokenSet = existingSets[setName];
     if (!tokenSet) {
       catalog.addSet(setName);
-      // addSet() 戻り値のプロパティが即時読取不可 → catalog.sets から再取得
+      await sleep(IMPORT_SET_OP_SLEEP_MS);
+      // addSet() 戻り値のプロパティ即時読取不可 → catalog.sets から再取得
       tokenSet = catalog.sets.find(s => s.name === setName);
       existingSets[setName] = tokenSet;
       stats.setsCreated++;
@@ -203,7 +222,17 @@ storage.importTokensDTCG = async (jsonString) => {
     }
 
     // Ensure set is active
-    if (!tokenSet.active) tokenSet.toggleActive();
+    if (!tokenSet.active) {
+      tokenSet.toggleActive();
+      await sleep(IMPORT_SET_OP_SLEEP_MS);
+    }
+
+    // 既存トークンマップを事前構築
+    const tokenMap = {};
+    for (const tk of tokenSet.tokens) {
+      tokenMap[tk.name] = tk;
+    }
+    existingTokensBySet[setName] = tokenMap;
 
     const flatTokens = _flattenDTCG(setData, '');
     for (const t of flatTokens) {
@@ -211,42 +240,43 @@ storage.importTokensDTCG = async (jsonString) => {
     }
   }
 
-  // バッチに分割
+  return { allBatchItems, existingSets, existingTokensBySet, stats };
+};
+
+// バッチ分割 + 処理（startIndex から開始）
+// existingTokensBySet を更新しながら処理し、重複作成を防止
+const _processTokenBatches = async (allBatchItems, existingSets, existingTokensBySet, stats, startIndex) => {
   const batches = [];
   for (let i = 0; i < allBatchItems.length; i += IMPORT_BATCH_SIZE) {
     batches.push(allBatchItems.slice(i, i + IMPORT_BATCH_SIZE));
   }
 
-  // 進捗保存の初期化
-  storage._importProgress = {
-    totalBatches: batches.length,
-    totalTokens: allBatchItems.length,
-    nextBatchIndex: 0,
-    stats: { ...stats },
-    dtcg, // 再開用に DTCG データを保持
-  };
-
-  // バッチ処理
-  for (let bi = 0; bi < batches.length; bi++) {
+  for (let bi = startIndex; bi < batches.length; bi++) {
     const batch = batches[bi];
 
     for (const { setName, token: t } of batch) {
       const tokenSet = existingSets[setName];
-      // 既存トークンとの重複チェック
-      const existingTokens = {};
-      for (const tk of tokenSet.tokens) {
-        existingTokens[tk.name] = tk;
-      }
+      const tokenMap = existingTokensBySet[setName];
 
-      const penpotType = _reverseTypeMap[t.type] || t.type || 'dimension';
-      if (existingTokens[t.name]) {
-        const existing = existingTokens[t.name];
-        if (existing.value !== t.value) {
-          existing.value = t.value;
+      // $extensions の penpotType を優先、なければ _reverseTypeMap、最終フォールバックは dimension
+      const penpotType = t.penpotType || _reverseTypeMap[t.type] || t.type || 'dimension';
+
+      if (tokenMap[t.name]) {
+        const existing = tokenMap[t.name];
+        if (String(existing.value) !== String(t.value)) {
+          // value は読み取り専用 → remove + addToken で更新
+          existing.remove();
+          await sleep(IMPORT_TOKEN_OP_SLEEP_MS);
+          tokenSet.addToken(penpotType, t.name, t.value);
+          tokenMap[t.name] = true; // マーカー更新
+          await sleep(IMPORT_TOKEN_OP_SLEEP_MS);
           stats.tokensUpdated++;
         }
       } else {
         tokenSet.addToken(penpotType, t.name, t.value);
+        // マップに追加して同バッチ内の重複作成を防止
+        tokenMap[t.name] = true;
+        await sleep(IMPORT_TOKEN_OP_SLEEP_MS);
         stats.tokensCreated++;
       }
     }
@@ -257,13 +287,41 @@ storage.importTokensDTCG = async (jsonString) => {
 
     // バッチ間 sleep（最後のバッチ以外）
     if (bi < batches.length - 1) {
-      await new Promise(r => setTimeout(r, IMPORT_BATCH_SLEEP_MS));
+      await sleep(IMPORT_BATCH_SLEEP_MS);
     }
   }
 
+  return stats;
+};
+
+// --- Public API ---
+
+storage.importTokensDTCG = async (jsonString) => {
+  const dtcg = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+  const initialStats = { setsCreated: 0, setsUpdated: 0, tokensCreated: 0, tokensUpdated: 0 };
+
+  const { allBatchItems, existingSets, existingTokensBySet, stats } =
+    await _prepareSets(dtcg, initialStats);
+
+  // バッチ数を計算
+  const totalBatches = Math.ceil(allBatchItems.length / IMPORT_BATCH_SIZE);
+
+  // 進捗保存の初期化
+  storage._importProgress = {
+    totalBatches,
+    totalTokens: allBatchItems.length,
+    nextBatchIndex: 0,
+    stats: { ...stats },
+    dtcg, // 再開用に DTCG データを保持
+  };
+
+  const finalStats = await _processTokenBatches(
+    allBatchItems, existingSets, existingTokensBySet, stats, 0
+  );
+
   // 全バッチ完了 → 進捗クリア
   storage._importProgress = null;
-  return stats;
+  return finalStats;
 };
 
 // --- 再開機能: 中断後に途中から再開 ---
@@ -276,74 +334,17 @@ storage.resumeImport = async () => {
 
   const { dtcg, nextBatchIndex } = progress;
   const stats = { ...progress.stats };
-  const catalog = penpot.library.local.tokens;
 
-  // 既存セットを再構築
-  const existingSets = {};
-  for (const s of catalog.sets) {
-    existingSets[s.name] = s;
-  }
+  const { allBatchItems, existingSets, existingTokensBySet } =
+    await _prepareSets(dtcg, stats);
 
-  // 全バッチアイテムを再生成
-  const allBatchItems = [];
-  for (const [setName, setData] of Object.entries(dtcg)) {
-    if (setName.startsWith('$')) continue;
-    // セットは既存のはず（前回の実行で作成済み）
-    let tokenSet = existingSets[setName];
-    if (!tokenSet) {
-      catalog.addSet(setName);
-      tokenSet = catalog.sets.find(s => s.name === setName);
-      existingSets[setName] = tokenSet;
-    }
-    if (!tokenSet.active) tokenSet.toggleActive();
-
-    const flatTokens = _flattenDTCG(setData, '');
-    for (const t of flatTokens) {
-      allBatchItems.push({ setName, token: t });
-    }
-  }
-
-  // バッチに分割
-  const batches = [];
-  for (let i = 0; i < allBatchItems.length; i += IMPORT_BATCH_SIZE) {
-    batches.push(allBatchItems.slice(i, i + IMPORT_BATCH_SIZE));
-  }
-
-  // nextBatchIndex から再開
-  for (let bi = nextBatchIndex; bi < batches.length; bi++) {
-    const batch = batches[bi];
-
-    for (const { setName, token: t } of batch) {
-      const tokenSet = existingSets[setName];
-      const existingTokens = {};
-      for (const tk of tokenSet.tokens) {
-        existingTokens[tk.name] = tk;
-      }
-
-      const penpotType = _reverseTypeMap[t.type] || t.type || 'dimension';
-      if (existingTokens[t.name]) {
-        const existing = existingTokens[t.name];
-        if (existing.value !== t.value) {
-          existing.value = t.value;
-          stats.tokensUpdated++;
-        }
-      } else {
-        tokenSet.addToken(penpotType, t.name, t.value);
-        stats.tokensCreated++;
-      }
-    }
-
-    storage._importProgress.nextBatchIndex = bi + 1;
-    storage._importProgress.stats = { ...stats };
-
-    if (bi < batches.length - 1) {
-      await new Promise(r => setTimeout(r, IMPORT_BATCH_SLEEP_MS));
-    }
-  }
+  const finalStats = await _processTokenBatches(
+    allBatchItems, existingSets, existingTokensBySet, stats, nextBatchIndex
+  );
 
   // 全バッチ完了 → 進捗クリア
   storage._importProgress = null;
-  return stats;
+  return finalStats;
 };
 
 // --- Style Dictionary Config Generator ---

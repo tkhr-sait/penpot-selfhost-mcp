@@ -58,6 +58,31 @@ tokens/
 | `color` | `color` | そのまま |
 | `textCase`, `textDecoration` | `string` | そのまま |
 
+### $extensions による Penpot 型の保持
+
+W3C DTCG 仕様では複数の Penpot トークン型が同じ DTCG `$type` にマッピングされるため、ラウンドトリップ（export → import）で元の型が失われる:
+- `spacing`, `sizing`, `borderRadius`, `borderWidth`, `fontSizes`, `letterSpacing` → `dimension`
+- `opacity`, `rotation` → `number`
+- `textCase`, `textDecoration` → `string`
+
+`exportTokensDTCG()` は DTCG `$type` から Penpot 元型を復元できないトークンに `$extensions` フィールドを付与:
+
+```json
+{
+  "$value": "16px",
+  "$type": "dimension",
+  "$extensions": { "com.penpot": { "type": "spacing" } }
+}
+```
+
+`importTokensDTCG()` は以下の優先順でタイプを解決:
+1. `$extensions['com.penpot'].type` （Penpot エクスポート由来）
+2. `_reverseTypeMap[dtcgType]` （外部 DTCG ファイル）
+3. DTCG `$type` そのまま
+4. フォールバック: `'dimension'`
+
+外部 DTCG JSON（`$extensions` なし）も従来通りインポート可能。
+
 ## 既知問題と対処
 
 ### fontFamilies の ClojureScript PersistentVector 問題
@@ -80,7 +105,17 @@ Penpot 内部で `fontFamilies` トークンの `value` が ClojureScript の Pe
 
 トークンを一括作成すると Plugin API の操作が UI 更新をトリガーし、WebSocket が切断されることがある。
 
-**対処**: `importTokensDTCG()` は 10 件ごとのバッチに分割し、各バッチ間に 200ms の sleep を挿入。切断が発生した場合は `storage.resumeImport()` で途中から再開可能。**MCP 再接続は不要**（自動復帰する）。
+**対処**:
+- `importTokensDTCG()` は 10 件ごとのバッチに分割し、各バッチ間に 200ms の sleep を挿入
+- 個別の `addToken` / トークン更新後にも 50ms の sleep を挿入（10件一気発火を防止）
+  - `token.value` は読み取り専用（getter のみ）のため、値更新は `token.remove()` + `set.addToken()` で行う
+- `addSet` / `toggleActive` 後にも 100ms の sleep を挿入
+- セットごとの既存トークンマップを事前構築し、ループ内 O(n²) 再構築を回避
+- 切断が発生した場合は `storage.resumeImport()` で途中から再開可能。**MCP 再接続は不要**（自動復帰する）
+
+### `resumeImport` のロジック統合
+
+`importTokensDTCG` と `resumeImport` は内部関数 `_prepareSets` / `_processTokenBatches` を共有。修正が1箇所で済み、ロジック不整合を防止。
 
 ### インポートの再開手順
 
