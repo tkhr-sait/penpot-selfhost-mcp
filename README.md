@@ -5,6 +5,49 @@ Penpot セルフホスト環境と MCP サーバーをオールインワンの D
 
 ![Claude CodeからPenpotにUIデザインを作成しているスクリーンショット](docs/images/top.png)
 
+## 準備
+
+- [VS Code](https://code.visualstudio.com/)
+- [Docker](https://www.docker.com/ja-jp/)（または [podman](https://podman.io/)。podman の場合は `dev.containers.dockerPath` を `podman` に設定）
+- VS Code 拡張機能 [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+> 動作確認環境: macOS + podman
+
+## クイックスタート
+
+1. リポジトリを VS Code で開き、コマンドパレット（`F1`）→ **Dev Containers: Reopen in Container** を選択
+2. AI エージェントに「penpotで〜」と依頼すると、環境の起動から MCP 接続まで自動で行われる
+3. 起動後 http://localhost:9001 にアクセス（デフォルト: `dev@example.com` / `devdev123`）
+
+> コマンドパレット（`F1`）→ **Browser: Open Integrated Browser** で VS Code 内ブラウザが使える
+
+### プロンプト例
+
+> **penpotでTODOアプリケーションのプロトタイプをインタラクション付きで作成して**
+
+> **penpotでレビューして結果をコメント登録して**
+
+> **penpotでコメント確認し修正して。修正内容をコメントで返して**
+
+> **penpotで作成したTODOアプリケーションのプロトタイプをもとに、アプリケーションを作成して**
+
+> **penpotでデザインシステムを構築して**
+
+> **penpotで既存のデザインを監査してトークンを抽出して**
+
+> **penpotにユーザー追加して。test@example.com**
+
+手動で環境を管理する場合は [SKILL.md](.claude/skills/penpot/SKILL.md) を参照。
+
+## 対応AIツール
+
+| ツール                   | MCP設定ファイル    | 備考                                                                              |
+| ------------------------ | ------------------ | --------------------------------------------------------------------------------- |
+| Claude Code(CLI)         | `.mcp.json`        | Streamable HTTP で直接接続                                                        |
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応 → [利用ガイド](.claude/skills/penpot/docs/github-copilot.md) |
+
+> Claude Code の [VS Code extension](https://code.claude.com/docs/en/vs-code#vs-code-extension-vs-claude-code-cli) を使う場合は `/penpot` でスキルを明示的に起動する必要がある。
+
 ## 仕組み — Agent Skills
 
 このプロジェクトの中核は **[Agent Skills](https://agentskills.io/)**。
@@ -40,47 +83,6 @@ Agent Skills は AI エージェントに専門的な知識とワークフロー
 
 ![ワークフロー図](docs/images/workflow.excalidraw.png)
 
-## 準備
-
-- [VS Code](https://code.visualstudio.com/)
-- [Docker](https://www.docker.com/ja-jp/)（または [podman](https://podman.io/)。podman の場合は `dev.containers.dockerPath` を `podman` に設定）
-- VS Code 拡張機能 [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-
-## クイックスタート
-
-1. リポジトリを VS Code で開き、コマンドパレット（`F1`）→ **Dev Containers: Reopen in Container** を選択
-2. AI エージェントに「penpotで〜」と依頼すると、環境の起動から MCP 接続まで自動で行われる
-3. 起動後 http://localhost:9001 にアクセス（デフォルト: `dev@example.com` / `devdev123`）
-
-> コマンドパレット（`F1`）→ **Browser: Open Integrated Browser** で VS Code 内ブラウザが使える
-
-### プロンプト例
-
-> **penpotにユーザ追加して。test@example.com**
->
-> **penpotでTODOアプリケーションのプロトタイプをインタラクション付きで作成して**
->
-> **penpotでレビューして結果をコメント登録して**
->
-> **penpotでコメント確認し修正して。修正内容をコメントで返して**
->
-> **penpotで作成したTODOアプリケーションのプロトタイプをもとに、アプリケーションを作成して**
->
-> **penpotでデザインシステムを構築して**
->
-> **penpotで既存のデザインを監査してトークンを抽出して**
-
-手動で環境を管理する場合は [SKILL.md](.claude/skills/penpot/SKILL.md) を参照。
-
-## 対応AIツール
-
-| ツール                   | MCP設定ファイル    | 備考                                                                              |
-| ------------------------ | ------------------ | --------------------------------------------------------------------------------- |
-| Claude Code(CLI)         | `.mcp.json`        | Streamable HTTP で直接接続                                                        |
-| GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応 → [利用ガイド](.claude/skills/penpot/docs/github-copilot.md) |
-
-> Claude Code の [VS Code extension](https://code.claude.com/docs/en/vs-code#vs-code-extension-vs-claude-code-cli) を使う場合は `/penpot` でスキルを明示的に起動する必要がある。
-
 ## アーキテクチャ
 
 ![penpot-selfhost-mcpのアーキテクチャ図](docs/images/arch.excalidraw.png)
@@ -91,17 +93,22 @@ MCP サーバーは [Penpot 公式リポジトリ](https://github.com/penpot/pen
 
 ## Design References
 
+### Penpot
+
 - [Penpot Documentation](https://help.penpot.app/) — Penpot 公式ドキュメント
   - [Penpot User Guide](https://help.penpot.app/user-guide/) - ユーザーガイド
   - [Technical Guide](https://help.penpot.app/technical-guide/) - テクニカルガイド
 - [Design Tokens with Penpot](https://penpot.app/blog/design-tokens-with-penpot/) — Penpot 公式トークンチュートリアル
 - [The developer's guide to design tokens and CSS variables](https://penpot.app/blog/the-developers-guide-to-design-tokens-and-css-variables/) — トークンと CSS 変数の関係
+- [Penpot Community](https://community.penpot.app/) — Penpot コミュニティフォーラム
+
+### 一般リソース
+
 - [Creating a Penpot Design Tokens Format with Style Dictionary](https://www.alwaystwisted.com/articles/a-design-tokens-workflow-part-12) — Style Dictionary と Penpot の連携ガイド
 - [Style Dictionary](https://github.com/amzn/style-dictionary) — トークン変換ツール
-- [Astro Starlight](https://starlight.astro.build/) — ドキュメントサイトテーマ
-- [Lost Pixel](https://github.com/lost-pixel/lost-pixel) — ビジュアルリグレッションテスト
 - [W3C Design Tokens Community Group](https://www.designtokens.org/) — トークン標準仕様
-- [Penpot Community](https://community.penpot.app/) — Penpot コミュニティフォーラム
+- [Astro Starlight](https://starlight.astro.build/) — ドキュメントサイトテーマ（将来予定）
+- [Lost Pixel](https://github.com/lost-pixel/lost-pixel) — ビジュアルリグレッションテスト（将来予定）
 
 ## License
 
