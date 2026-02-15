@@ -6,6 +6,10 @@
 
 name: penpot
 
+x-locale: &locale
+  TZ: ${TZ:-Asia/Tokyo}
+  LANG: ${LANG:-ja_JP.UTF-8}
+
 x-flags: &penpot-flags
   PENPOT_FLAGS: >-
     enable-registration
@@ -46,7 +50,7 @@ services:
       - penpot-backend
       - penpot-exporter
     environment:
-      <<: [*penpot-flags, *penpot-http-body-size]
+      <<: [*locale, *penpot-flags, *penpot-http-body-size]
       PENPOT_BACKEND_URI: http://penpot-backend:6060
       PENPOT_EXPORTER_URI: http://penpot-exporter:6061
       ## Patches (set to false to disable)
@@ -67,6 +71,7 @@ services:
     environment:
       <<:
         [
+          *locale,
           *penpot-flags,
           *penpot-public-uri,
           *penpot-http-body-size,
@@ -88,7 +93,7 @@ services:
       penpot-valkey:
         condition: service_healthy
     environment:
-      <<: *penpot-secret-key
+      <<: [*locale, *penpot-secret-key]
       PENPOT_PUBLIC_URI: http://penpot-frontend:8080
       PENPOT_REDIS_URI: redis://penpot-valkey/0
     networks:
@@ -101,6 +106,7 @@ services:
     volumes:
       - penpot_postgres_v15:/var/lib/postgresql/data
     environment:
+      <<: *locale
       POSTGRES_INITDB_ARGS: --data-checksums
       POSTGRES_DB: penpot
       POSTGRES_USER: penpot
@@ -121,6 +127,8 @@ services:
       valkey-server
       --maxmemory 128mb
       --maxmemory-policy volatile-lfu
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 1s
@@ -146,6 +154,7 @@ services:
     volumes:
       - ./patches/mcp-keepalive.cjs:/app/mcp-keepalive.cjs:ro
     environment:
+      <<: *locale
       PENPOT_MCP_SERVER_LISTEN_ADDRESS: "0.0.0.0"
       PENPOT_MCP_SERVER_PORT: "4401"
       PENPOT_MCP_WEBSOCKET_PORT: "4402"
@@ -171,6 +180,7 @@ services:
     volumes:
       - ./patches/mcp-keepalive.cjs:/app/mcp-keepalive.cjs:ro
     environment:
+      <<: *locale
       PENPOT_MCP_SERVER_LISTEN_ADDRESS: "0.0.0.0"
       PENPOT_MCP_SERVER_PORT: "4401"
       PENPOT_MCP_WEBSOCKET_PORT: "4402"
@@ -189,6 +199,7 @@ services:
       - penpot-frontend
       - penpot-mcp-claude
     environment:
+      <<: *locale
       PENPOT_PUBLIC_URI: "http://penpot-frontend:8080"
       PENPOT_MCP_EMAIL: "${PENPOT_MCP_CLAUDE_EMAIL:-mcp-claude@penpot.local}"
       PENPOT_MCP_PASSWORD: "${PENPOT_MCP_CLAUDE_PASSWORD:-mcpclaude123}"
@@ -207,6 +218,7 @@ services:
       - penpot-frontend
       - penpot-mcp-copilot
     environment:
+      <<: *locale
       PENPOT_PUBLIC_URI: "http://penpot-frontend:8080"
       PENPOT_MCP_EMAIL: "${PENPOT_MCP_COPILOT_EMAIL:-mcp-copilot@penpot.local}"
       PENPOT_MCP_PASSWORD: "${PENPOT_MCP_COPILOT_PASSWORD:-mcpcopilot123}"
@@ -222,6 +234,8 @@ services:
     restart: unless-stopped
     ports:
       - "${PENPOT_STORYBOOK_PORT:-6006}:8080"
+    environment:
+      <<: *locale
     networks:
       - penpot
 

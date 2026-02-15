@@ -1,6 +1,7 @@
 FROM node:22
 
 ARG TZ=UTC
+ARG LANG=ja_JP.UTF-8
 # macOSのデフォルト。Linuxでは devcontainer.json の updateRemoteUserUID で自動リマップされる
 ARG USER_UID=501
 ARG USER_GID=20
@@ -26,14 +27,14 @@ RUN apt update && \
   aggregate \
   jq \
   vim \
+  htop \
   locales
 
-# Configure Japanese locale
-RUN sed -i 's/^# *ja_JP.UTF-8 UTF-8/ja_JP.UTF-8 UTF-8/' /etc/locale.gen && \
-  locale-gen
+# Configure locale
+RUN sed -i "s/^# *\(${LANG}\)/\1/" /etc/locale.gen && locale-gen
 
-ENV LANG=ja_JP.UTF-8
-ENV LC_ALL=ja_JP.UTF-8
+ENV LANG=${LANG}
+ENV LC_ALL=${LANG}
 
 # ターゲットUID/GIDと競合する既存ユーザー/グループを処理
 # (例: node:22イメージの node ユーザー UID=1000)

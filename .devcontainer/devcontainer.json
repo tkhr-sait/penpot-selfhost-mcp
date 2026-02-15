@@ -8,7 +8,8 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      "TZ": "Asia/Tokyo"
+      "TZ": "${localEnv:TZ:Asia/Tokyo}",
+      "LANG": "ja_JP.UTF-8"
     }
   },
   "features": {

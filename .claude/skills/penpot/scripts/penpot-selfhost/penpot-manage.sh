@@ -200,6 +200,66 @@ _setup_shared_teams() {
       WHERE r.team_id = '${team_id}'::uuid AND r.profile_id = p.id
     );
   " > /dev/null 2>&1 && echo "All users added to '$team_name' team." || true
+
+  # Get or create default project in shared team
+  local default_project_id
+  default_project_id=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
+    "SELECT id FROM project WHERE team_id = '${team_id}'::uuid AND is_default = true AND deleted_at IS NULL LIMIT 1;" 2>/dev/null)
+  default_project_id=$(echo "$default_project_id" | tr -d '[:space:]')
+
+  if [ -z "$default_project_id" ]; then
+    docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c "
+      INSERT INTO project (id, team_id, name, is_default, created_at, modified_at)
+      VALUES (gen_random_uuid(), '${team_id}'::uuid, 'Drafts', true, now(), now());" > /dev/null 2>&1
+    default_project_id=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
+      "SELECT id FROM project WHERE team_id = '${team_id}'::uuid AND is_default = true AND deleted_at IS NULL LIMIT 1;" 2>/dev/null)
+    default_project_id=$(echo "$default_project_id" | tr -d '[:space:]')
+  fi
+
+  # Set shared team as default for all users
+  if [ -n "$default_project_id" ]; then
+    docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c "
+      UPDATE profile
+      SET default_team_id = '${team_id}'::uuid,
+          default_project_id = '${default_project_id}'::uuid;" > /dev/null 2>&1 \
+      && echo "Default team set to '$team_name' for all users." || true
+  fi
+}
+
+_add_profile_to_shared_team() {
+  local email="$1"
+  local team_name="${PENPOT_SHARED_TEAM_NAME:-Shared Workspace}"
+
+  local team_id
+  team_id=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
+    "SELECT id FROM team WHERE name = '$team_name' AND is_default = false LIMIT 1;" 2>/dev/null)
+  team_id=$(echo "$team_id" | tr -d '[:space:]')
+  [ -z "$team_id" ] && return 0
+
+  # Add to shared team
+  docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c "
+    INSERT INTO team_profile_rel (team_id, profile_id, is_owner, is_admin, can_edit)
+    SELECT '${team_id}'::uuid, p.id, true, true, true
+    FROM profile p
+    WHERE p.email = '$email'
+      AND NOT EXISTS (
+        SELECT 1 FROM team_profile_rel r
+        WHERE r.team_id = '${team_id}'::uuid AND r.profile_id = p.id
+      );" > /dev/null 2>&1
+
+  # Set default team
+  local default_project_id
+  default_project_id=$(docker exec -i $CT_POSTGRES psql -U penpot -d penpot -tAc \
+    "SELECT id FROM project WHERE team_id = '${team_id}'::uuid AND is_default = true AND deleted_at IS NULL LIMIT 1;" 2>/dev/null)
+  default_project_id=$(echo "$default_project_id" | tr -d '[:space:]')
+
+  if [ -n "$default_project_id" ]; then
+    docker exec -i $CT_POSTGRES psql -U penpot -d penpot -c "
+      UPDATE profile
+      SET default_team_id = '${team_id}'::uuid,
+          default_project_id = '${default_project_id}'::uuid
+      WHERE email = '$email';" > /dev/null 2>&1
+  fi
 }
 
 _setup_mcp_workspace() {
@@ -286,6 +346,9 @@ cmd_create_profile() {
   docker exec -i $CT_BACKEND python3 manage.py create-profile \
     -e "$email" -n "$fullname" -p "$password"
   echo "Profile created: $email"
+
+  # Add to shared team and set as default
+  _add_profile_to_shared_team "$email"
 }
 
 cmd_setup() {
