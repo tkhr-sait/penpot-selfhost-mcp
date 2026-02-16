@@ -42,15 +42,71 @@ PENPOT_STORYBOOK_PORT=6006
 
 ## 初期化
 
+### 前提
+
+`@storybook/react-vite` は `@vitejs/plugin-react` を**自動注入しない**。
+プロジェクトに `vite.config.js` + `react()` プラグインがなければ JSX 自動ランタイムが無効になり「React is not defined」エラーが発生する。
+
+### 手順
+
 ```bash
-# 非対話的に初期化（React + Vite）
+# 1. Storybook 初期化（依存関係のインストールはスキップ）
 npx storybook@latest init --type react --builder vite --yes --skip-install
+
+# 2. React + Vite プラグインを追加（--skip-install では含まれない）
+npm install react react-dom
+npm install --save-dev @vitejs/plugin-react
+
+# 3. 全依存関係をインストール
 npm install
 ```
 
-注意点:
+`vite.config.js`（プロジェクトルート）:
+```javascript
+import react from '@vitejs/plugin-react';
+
+export default {
+  plugins: [react()],
+};
+```
+
+### 注意点
+
 - Storybook v10: デフォルトのストーリー配置は `stories/`（`src/stories/` ではない）
 - ESM: `package.json` に `"type": "module"` がないと警告が出る
+- JSX ファイルに `import React from 'react'` は不要（`react()` プラグインが自動ランタイムを有効化）
+
+## CSS トークン使用ルール
+
+### 原則
+
+コンポーネント CSS では `--ds-*` 変数を使用し、ハードコード値を避ける。
+
+### プロパティ対応表
+
+| CSS プロパティ | トークン変数 |
+|---------------|-------------|
+| color, background-color | `--ds-color-*` |
+| font-size | `--ds-font-size-*` |
+| font-family | `--ds-font-family-*` |
+| font-weight | `--ds-font-weight-*` |
+| line-height | `--ds-line-height-*` |
+| padding, margin, gap, top, right, bottom, left | `--ds-spacing-*` |
+| border-radius | `--ds-border-radius-*` |
+| border-width | `--ds-border-width-*` |
+| width, height | `--ds-sizing-*` |
+
+### 例外（ハードコード許容）
+
+- レイアウト固有の寸法（`width: 375px`, `height: 812px` 等）
+- box-shadow（shadow トークン未定義のため）
+- z-index
+- `0`, `100%`, `auto`, `50%` 等の汎用値
+- `rgba()` によるオーバーレイ
+
+### トークン不足時
+
+必要なトークンが `build/css/variables.css` にない場合、`tokens/core/*.json` に追加してから使用する。CSS に直書きしない。
 
 ## Penpot コンポーネント構造
 
@@ -127,14 +183,16 @@ export default {
 |-----------|---------|------|
 | `storybook` | `storybook dev -p 6007` | dev サーバー (HMR) |
 | `storybook:build` | `storybook build` | 静的ビルド → `storybook-static/` |
-| `storybook:deploy` | `npm run tokens:build && npm run storybook:build` | 一括: トークンビルド → Storybook ビルド |
+| `tokens:audit` | `! grep ... \| grep -v 'ds-ignore' \| grep .` | CSS ハードコード値検出（失敗で exit 1） |
+| `storybook:deploy` | `npm run tokens:build && npm run tokens:audit && npm run storybook:build` | 一括: トークンビルド → 監査 → Storybook ビルド |
 
 ```json
 {
   "scripts": {
     "storybook": "storybook dev -p 6007",
     "storybook:build": "storybook build",
-    "storybook:deploy": "npm run tokens:build && npm run storybook:build"
+    "tokens:audit": "! grep -n -E ':\\s*[0-9]+(px|rem|em)' stories/*.css | grep -v -E 'var\\(--ds-' | grep -v -E '(width|height|min-width|min-height|max-width|max-height):\\s*[0-9]' | grep -v 'ds-ignore' | grep .",
+    "storybook:deploy": "npm run tokens:build && npm run tokens:audit && npm run storybook:build"
   }
 }
 ```
@@ -145,9 +203,11 @@ export default {
 
 ```
 1. デザイナー: Penpot で新コンポーネントをデザイン、トークンを適用
-2. 開発者: MCP でコンポーネント情報を取得
-3. 開発者: Storybook でコンポーネントを実装（トークン生成 CSS 変数を使用）
-4. 開発者: ストーリーを作成・動作確認
+2. 開発者: トークン同期（Pipeline 01）→ SD ビルド（Pipeline 02）でCSS変数を最新化
+3. 開発者: MCP でコンポーネント情報を取得
+4. 開発者: Storybook でコンポーネントを実装（CSS 変数のみ使用、ハードコード禁止）
+5. 開発者: `npm run tokens:audit` でハードコード値がないことを確認
+6. 開発者: ストーリーを作成・動作確認
 ```
 
 ## 日常ワークフロー: トークン変更

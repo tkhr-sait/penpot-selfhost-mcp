@@ -1,0 +1,8 @@
+{
+  "name": "penpot-mcp-proxy",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  }
+}

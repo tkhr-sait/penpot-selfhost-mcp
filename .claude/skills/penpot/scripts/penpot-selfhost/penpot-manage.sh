@@ -98,7 +98,7 @@ cmd_up() {
     echo "Info: storybook-static/ が見つかりません。Storybook コンテナはスキップ。"
     echo "  生成: npm run storybook:build → 再度 up で起動"
   fi
-  dc up -d $sb_profile
+  dc $sb_profile up -d
   echo "Penpot is running at ${PENPOT_PUBLIC_URI:-http://localhost:9001}"
   echo ""
 
@@ -456,7 +456,7 @@ cmd_restore() {
 cmd_restart() {
   local sb_profile
   sb_profile=$(_storybook_profile_args)
-  dc up -d --force-recreate $sb_profile
+  dc $sb_profile up -d --force-recreate
 }
 
 cmd_update() {

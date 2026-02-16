@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["mcp__penpot-official", "Skill(penpot)", "Bash(bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh *)"]
+    "allow": ["mcp__penpot-official", "Skill(penpot)", "Bash(bash **/penpot-manage.sh *)"]
   },
   "enabledMcpjsonServers": ["penpot-official"],
   "env": {

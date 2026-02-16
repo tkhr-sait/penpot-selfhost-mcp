@@ -59,9 +59,10 @@ Lost Pixel（ビジュアルリグレッションテスト）
 | スクリプト | コマンド | 説明 |
 |-----------|---------|------|
 | `tokens:build` | `style-dictionary build --config style-dictionary.config.js` | トークン → CSS 変数 |
+| `tokens:audit` | `! grep ... \| grep -v 'ds-ignore' \| grep .` | CSS ハードコード値検出（失敗で exit 1） |
 | `storybook` | `storybook dev -p 6007` | Storybook dev サーバー |
 | `storybook:build` | `storybook build` | Storybook 静的ビルド |
-| `storybook:deploy` | `npm run tokens:build && npm run storybook:build` | 一括ビルド |
+| `storybook:deploy` | `npm run tokens:build && npm run tokens:audit && npm run storybook:build` | 一括ビルド（監査含む） |
 
 ## パイプライン一覧
 

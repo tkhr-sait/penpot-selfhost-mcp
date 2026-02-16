@@ -1,0 +1,7 @@
+services:
+  proxy:
+    image: penpot-mcp-proxy
+    build:
+      context: ..
+      dockerfile: mcp-proxy/Dockerfile
+    network_mode: host

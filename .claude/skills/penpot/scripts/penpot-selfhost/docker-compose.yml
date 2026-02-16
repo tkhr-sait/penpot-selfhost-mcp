@@ -106,7 +106,7 @@ services:
     volumes:
       - penpot_postgres_v15:/var/lib/postgresql/data
     environment:
-      <<: *locale
+      TZ: ${TZ:-Asia/Tokyo}
       POSTGRES_INITDB_ARGS: --data-checksums
       POSTGRES_DB: penpot
       POSTGRES_USER: penpot

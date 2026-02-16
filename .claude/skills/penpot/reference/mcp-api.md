@@ -22,17 +22,53 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 
 | ツール | 用途 |
 |--------|------|
+| `mcp__penpot-official__activate` | セッション開始/再接続（penpot-init.js 自動実行） |
 | `mcp__penpot-official__execute_code` | Plugin API 環境でJavaScriptを実行 |
 | `mcp__penpot-official__export_shape` | シェイプをPNG/SVGでエクスポート（視覚確認） |
 | `mcp__penpot-official__penpot_api_info` | API型定義・メンバー情報を取得 |
-| `mcp__penpot-official__high_level_overview` | Plugin API の概要（初回のみ） |
+| `mcp__penpot-official__high_level_overview` | Plugin API の概要 |
+
+> **注意**: `activate` 以外の全ツールは `activate` 呼び出し前はエラーを返す。
 
 ## Plugin API リファレンス
 
-penpot / penpotUtils / storage の詳細は **MCP 接続時のシステムプロンプトに記載済み**。型情報は `mcp__penpot-official__penpot_api_info` ツールで確認。
+penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_overview` ツールで取得可能。型情報は `mcp__penpot-official__penpot_api_info` ツールで確認。
 
 **注意**: `penpot.library.connectLibrary()` の返り値は不完全な場合がある（`name: null`, `components: []`）。
 `storage.connectLibrary(id)` ラッパーを使うか、接続後に `penpot.library.connected.find(l => l.id === id)` で再取得すること。
+
+## Plugin API 実践的制約
+
+### レイアウト
+- **layoutChild は appendChild 後に sleep 必須**: `layoutChild` は追加直後 `null`。100ms 以上の sleep 後にアクセスすること
+- **Flex column/row の children 配列は視覚順序と逆**: `appendChild` は配列先頭に挿入 → 視覚的末尾に追加（呼び出し順 = 表示順）
+- **子要素追加**: Flex 親は `appendChild`、非 Flex 親は `insertChild(children.length, shape)`
+
+### テキスト
+- `storage.createText()` で fontFamily 自動設定（sourcesanspro）
+- `growType` は `resize()` 後に "fixed" リセット → 必要なら再設定
+- サイズ変更は `fontSize` プロパティ（`resize()` ではない）
+
+### ボード・シェイプ
+- `width`/`height` は読み取り専用 → `resize(w, h)`
+- `remove()` はコンポーネント配下では非表示のみ（完全削除は REST API `del-component` / `purge-component`）
+
+### トークン
+- `token.value` は読み取り専用 → `remove()` + `addToken()` で更新
+- `addSet()` 戻り値は即時読取不可 → `catalog.sets.find()` で再取得
+- 大量操作は 10件バッチ + 200ms sleep（WebSocket 切断対策。切断しても MCP 再接続は不要、自動復帰）
+
+### インタラクション
+- 同一ページ内のボード間のみ有効（異なるページ間は動作しない）
+- `shape.addInteraction(trigger, action, delay?)` で追加
+- NavigateTo: `{ type: 'navigate-to', destination: targetBoard }`
+- OpenOverlay: `{ type: 'open-overlay', destination: overlayBoard, position: 'center', ... }`
+- CloseOverlay: `{ type: 'close-overlay' }`
+- API 型は `mcp__penpot-official__penpot_api_info` で確認
+
+### 全般
+- `mcp__penpot-official__high_level_overview` の API 仕様を遵守（insertChild、growType、Flex順序等）
+- 完了後の検証: [validate-design.js](../scripts/mcp-snippets/validate-design.js) で制約違反を検出
 
 ## セルフホスト環境固有の注意
 

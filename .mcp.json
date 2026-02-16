@@ -1,8 +1,12 @@
 {
   "mcpServers": {
     "penpot-official": {
-      "type": "http",
-      "url": "http://localhost:4401/mcp"
+      "command": "docker",
+      "args": [
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--rm", "-T", "proxy",
+        "--upstream=http://localhost:4401/mcp"
+      ]
     }
   }
 }
