@@ -37,6 +37,10 @@ Penpot セルフホスト環境と MCP サーバーをオールインワンの D
 
 > **penpotにユーザー追加して。test@example.com**
 
+> **frontend-design で、todoアプリの画面デザイン案を３つ tmp/ 下に出力して**
+
+> **penpotで frontend-design で作成されたデザインを元にプロトタイプを作成して**
+
 手動で環境を管理する場合は [SKILL.md](.claude/skills/penpot/SKILL.md) を参照。
 
 ## 対応AIツール

@@ -39,6 +39,22 @@ penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_ov
 
 ## Plugin API 実践的制約
 
+### execute_code
+
+- **戻り値は `return` で返す**: 末尾の式評価では出力されない（`result` が空文字になる）
+  ```javascript
+  // NG: result が空
+  JSON.stringify(data);
+  // OK
+  return JSON.stringify(data);
+  ```
+- **`penpotUtils` を活用する**: 独自のシェイプ検索・ページ走査を実装しない
+  - ページ走査: `penpotUtils.getPages()` / `penpotUtils.getPageById(id)`（※ `penpot.pages` は存在しない）
+  - シェイプ検索: `penpotUtils.findShapes(predicate, root)` — root に frame を渡せば配下を再帰検索（※ `frame.findShapes()` は存在しない。`page.findShapes()` とは別）
+  - 構造確認: `penpotUtils.shapeStructure(shape, depth)`
+  - 全ユーティリティ一覧: `high_level_overview` 参照
+- **不明な型・メソッド**: `penpot_api_info` で確認してから使用
+
 ### レイアウト
 - **layoutChild は appendChild 後に sleep 必須**: `layoutChild` は追加直後 `null`。100ms 以上の sleep 後にアクセスすること
 - **Flex column/row の children 配列は視覚順序と逆**: `appendChild` は配列先頭に挿入 → 視覚的末尾に追加（呼び出し順 = 表示順）
