@@ -1,7 +1,49 @@
+# Claude Code
 .claude/settings.local.json
+
+# Dependencies
 node_modules/
+.npm
+.yarn/
 
-*storybook.log
-storybook-static
+# Build output
+dist/
+build/
+storybook-static/
 
+# Credentials / Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials.json
+secrets.json
+token.json
+.npmrc
+.netrc
+
+# Logs
+*.log
+
+# Temporary files
 tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Node.js
+.eslintcache
+*.tgz
+coverage/
+.nyc_output/
