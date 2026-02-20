@@ -1,5 +1,5 @@
 {
-  "name": "penpot-mcp-proxy",
+  "name": "mcp-proxy",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -1,4 +1,4 @@
-# ADR-003: MCP プロキシによるゲート + 再接続管理
+# ADR-003: MCP プロキシによるゲート + 再接続管理（汎用プロキシ）
 
 ## Status
 
@@ -35,6 +35,19 @@ stdio プロキシ MCP サーバーを挟み、以下の制御を行う。
 
 ## Architecture
 
+プロキシは CLI 引数により汎用化されており、複数の上流 MCP サーバーに対応する。
+
+### CLI 引数
+
+| 引数 | デフォルト（Penpot 後方互換） | Storybook 用 |
+|------|-------------------------------|-------------|
+| `--upstream=URL` | `http://localhost:4401/mcp` | `http://localhost:6007/mcp` |
+| `--name=NAME` | `penpot-official` | `storybook-mcp` |
+| `--no-init` | （なし＝init有効） | `--no-init` |
+| `--tools=LIST` | `execute_code,export_shape,penpot_api_info,high_level_overview` | `*`（全転送） |
+
+### Penpot 接続
+
 ```
 AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → penpot-official MCP (localhost:4401)
                           │
@@ -43,6 +56,15 @@ AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → penpot-official MCP (lo
                           ├── export_shape       ← unlocked 時のみ転送
                           ├── penpot_api_info    ← unlocked 時のみ転送
                           └── high_level_overview← unlocked 時のみ転送
+```
+
+### Storybook 接続
+
+```
+AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → storybook-mcp (localhost:6007)
+                          │
+                          ├── activate           ← ゲート解除（auto-init なし）
+                          └── *（全ツール）      ← unlocked 時のみ転送
 ```
 
 ### デプロイ
@@ -75,6 +97,7 @@ AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → penpot-official MCP (lo
 3. **penpot-init.js の auto-init** — activate で自動実行し、手動の初期化忘れを排除
 4. **activate が冪等** — 初回ゲート解除、再接続、再初期化のすべてを1つのツールで制御
 5. **Docker コンテナ化 + infra 非依存** — penpot-selfhost の docker-compose.yml には依存せず、独立した compose ファイルで起動。`docker compose run` による自動ビルド + stdio 接続
+6. **CLI 引数による汎用化** — 同一 Docker イメージで Penpot・Storybook 等の複数上流に対応。`--upstream`, `--name`, `--no-init`, `--tools` で動作を切り替え
 
 ## Consequences
 

@@ -12,10 +12,30 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INIT_SCRIPT = resolve(__dirname, "../mcp-snippets/penpot-init.js");
-const UPSTREAM_URL =
-  process.argv.find((a) => a.startsWith("--upstream="))?.split("=")[1] ||
-  "http://localhost:4401/mcp";
+
+// --- CLI argument parsing ---
+function getArg(name, def) {
+  const a = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return a ? a.split("=").slice(1).join("=") : def;
+}
+const hasFlag = (name) => process.argv.includes(`--${name}`);
+
+const UPSTREAM_URL = getArg("upstream", "http://localhost:4401/mcp");
+const SERVER_NAME = getArg("name", "penpot-official");
+const SKILL_NAME = getArg("skill", ""); // e.g. "/penpot"
+const GATE_ENABLED = !!SKILL_NAME;
+const NO_INIT = hasFlag("no-init");
+const INIT_SCRIPT = NO_INIT
+  ? null
+  : resolve(__dirname, "../mcp-snippets/penpot-init.js");
+const TOOLS_ARG = getArg(
+  "tools",
+  "execute_code,export_shape,penpot_api_info,high_level_overview"
+);
+const TOOL_WILDCARD = TOOLS_ARG === "*";
+const TOOL_LIST = TOOL_WILDCARD
+  ? []
+  : TOOLS_ARG.split(",").map((t) => t.trim());
 
 // --- State ---
 let upstream = null; // Client instance
@@ -32,7 +52,10 @@ async function connectUpstream() {
     }
     upstream = null;
   }
-  const client = new Client({ name: "penpot-proxy", version: "1.0.0" });
+  const client = new Client({
+    name: `${SERVER_NAME}-proxy`,
+    version: "1.0.0",
+  });
 
   // Try StreamableHTTP first, fall back to SSE
   let connected = false;
@@ -55,6 +78,10 @@ async function connectUpstream() {
 
 // --- Auto-init (re-run on reconnect) ---
 async function autoInit(force = false) {
+  if (NO_INIT) {
+    initDone = true;
+    return;
+  }
   if (initDone && !force) return;
   const code = readFileSync(INIT_SCRIPT, "utf-8");
   const result = await upstream.callTool({
@@ -66,13 +93,12 @@ async function autoInit(force = false) {
 
 // --- Create server ---
 const server = new Server(
-  { name: "penpot-official", version: "1.0.0" },
+  { name: SERVER_NAME, version: "1.0.0" },
   {
     capabilities: { tools: {} },
-    instructions:
-      "Penpot操作には /penpot スキルのロードが必要です。\n" +
-      "スキルロード後、activate で MCP セッションを開始してください。\n" +
-      "上流切断時は activate を再度呼び出してください。",
+    instructions: SKILL_NAME
+      ? `${SERVER_NAME} の操作には ${SKILL_NAME} スキルのロードが必要です。\nスキルロード後、activate で MCP セッションを開始してください。\n上流切断時は activate を再度呼び出してください。`
+      : `${SERVER_NAME} MCP プロキシ。上流に透過転送します。`,
   }
 );
 
@@ -91,79 +117,58 @@ async function cacheUpstreamTools() {
 const ACTIVATE_TOOL = {
   name: "activate",
   description:
-    "Penpot MCP セッションを開始/再接続する。" +
-    "スキルロード後に呼び出すこと。penpot-init.js を自動実行。",
+    `${SERVER_NAME} MCP セッションを開始/再接続する。` +
+    (SKILL_NAME ? `\n${SKILL_NAME} スキルロード後に呼び出すこと。` : "") +
+    (NO_INIT ? "" : "\n初期化スクリプトを自動実行。"),
   inputSchema: { type: "object", properties: {} },
 };
 
-const WORKFLOW_SUFFIX =
-  "\n[WORKFLOW] activate が未呼び出しの場合はエラー。";
+const WORKFLOW_SUFFIX = GATE_ENABLED
+  ? "\n[WORKFLOW] activate が未呼び出しの場合はエラー。"
+  : "";
 
-const EXPOSED_TOOLS = [
-  "execute_code",
-  "export_shape",
-  "penpot_api_info",
-  "high_level_overview",
-];
-
-// Fallback tool definitions (before activate)
-const FALLBACK_TOOLS = [
-  {
-    name: "execute_code",
-    description: "Penpot プラグインで JavaScript を実行。" + WORKFLOW_SUFFIX,
-    inputSchema: {
-      type: "object",
-      properties: { code: { type: "string", minLength: 1 } },
-      required: ["code"],
-    },
-  },
-  {
-    name: "export_shape",
-    description: "シェイプを PNG/SVG にエクスポート。" + WORKFLOW_SUFFIX,
-    inputSchema: {
-      type: "object",
-      properties: {
-        shapeId: { type: "string", minLength: 1 },
-        format: { type: "string", enum: ["png", "svg"], default: "png" },
-        mode: { type: "string", enum: ["shape", "fill"], default: "shape" },
-      },
-      required: ["shapeId"],
-    },
-  },
-  {
-    name: "penpot_api_info",
-    description: "Penpot API の型情報を取得。" + WORKFLOW_SUFFIX,
-    inputSchema: {
-      type: "object",
-      properties: {
-        type: { type: "string", minLength: 1 },
-        member: { type: "string" },
-      },
-      required: ["type"],
-    },
-  },
-  {
-    name: "high_level_overview",
-    description: "Penpot Plugin API の概要を取得。" + WORKFLOW_SUFFIX,
+// Build fallback tool definitions (before activate, gate mode only)
+function buildFallbackTools() {
+  if (!GATE_ENABLED || TOOL_WILDCARD) return [];
+  return TOOL_LIST.map((name) => ({
+    name,
+    description: `${SERVER_NAME} ツール (${name})。` + WORKFLOW_SUFFIX,
     inputSchema: { type: "object", properties: {} },
-  },
-];
+  }));
+}
+
+const FALLBACK_TOOLS = buildFallbackTools();
 
 // --- tools/list ---
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  const tools = [ACTIVATE_TOOL];
+  const tools = [];
+
+  if (GATE_ENABLED) {
+    tools.push(ACTIVATE_TOOL);
+  }
 
   if (upstreamToolsCache) {
-    for (const name of EXPOSED_TOOLS) {
-      const tool = upstreamToolsCache[name];
-      if (tool) {
+    if (TOOL_WILDCARD) {
+      // Expose all upstream tools
+      for (const tool of Object.values(upstreamToolsCache)) {
         tools.push({
           ...tool,
           description: (tool.description || "") + WORKFLOW_SUFFIX,
         });
       }
+    } else {
+      // Expose only whitelisted tools
+      for (const name of TOOL_LIST) {
+        const tool = upstreamToolsCache[name];
+        if (tool) {
+          tools.push({
+            ...tool,
+            description: (tool.description || "") + WORKFLOW_SUFFIX,
+          });
+        }
+      }
     }
-  } else {
+  } else if (GATE_ENABLED) {
     tools.push(...FALLBACK_TOOLS);
   }
 
@@ -174,7 +179,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
 
-  // --- activate (idempotent) ---
+  // --- activate (idempotent, gate mode only) ---
   if (name === "activate") {
     if (unlocked && upstream !== null) {
       return {
@@ -187,7 +192,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       await autoInit(!initDone ? false : true);
       unlocked = true;
       return {
-        content: [{ type: "text", text: "Penpot MCP activated. Ready." }],
+        content: [
+          { type: "text", text: `${SERVER_NAME} MCP activated. Ready.` },
+        ],
       };
     } catch (e) {
       return {
@@ -197,7 +204,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             text:
               `上流 MCP に接続できません: ${e.message}\n` +
               `URL: ${UPSTREAM_URL}\n` +
-              `Docker が起動しているか確認してください。`,
+              `上流サービスが起動しているか確認してください。`,
           },
         ],
         isError: true,
@@ -205,15 +212,50 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
   }
 
-  // --- Gate check ---
-  if (!unlocked) {
+  // --- Transparent mode: auto-connect on first call ---
+  if (!GATE_ENABLED && !upstream) {
+    try {
+      upstream = await connectUpstream();
+      await cacheUpstreamTools();
+      await autoInit(false);
+      unlocked = true;
+    } catch (e) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `上流 MCP に接続できません: ${e.message}\n` +
+              `URL: ${UPSTREAM_URL}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  // --- Gate check (gate mode only) ---
+  if (GATE_ENABLED && !unlocked) {
     return {
       content: [
         {
           type: "text",
           text:
-            "Penpot スキルがロードされていません。\n" +
-            "/penpot スキルを実行してから再試行してください。",
+            `${SERVER_NAME} スキルがロードされていません。\n` +
+            `${SKILL_NAME} スキルを実行してから再試行してください。`,
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  // --- Tool whitelist check (skip for wildcard) ---
+  if (!TOOL_WILDCARD && !TOOL_LIST.includes(name)) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${SERVER_NAME}: ツール "${name}" は公開されていません。`,
         },
       ],
       isError: true,
@@ -227,13 +269,26 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     // Upstream disconnected (keep unlocked, don't re-lock)
     upstream = null;
     initDone = false;
+
+    // Transparent mode: try auto-reconnect once
+    if (!GATE_ENABLED) {
+      try {
+        upstream = await connectUpstream();
+        await cacheUpstreamTools();
+        await autoInit(false);
+        return await upstream.callTool({ name, arguments: args });
+      } catch {
+        upstream = null;
+      }
+    }
+
     return {
       content: [
         {
           type: "text",
-          text:
-            "上流 MCP が切断されました。\n" +
-            "activate を呼び出して再接続してください。",
+          text: GATE_ENABLED
+            ? "上流 MCP が切断されました。\nactivate を呼び出して再接続してください。"
+            : "上流 MCP が切断され、自動再接続にも失敗しました。\n上流サービスの状態を確認してください。",
         },
       ],
       isError: true,

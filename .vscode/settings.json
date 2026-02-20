@@ -1,7 +1,7 @@
 {
   "workbench.browser.openLocalhostLinks": true,
   "chat.tools.terminal.autoApprove": {
-    "/^bash \\.claude/skills/penpot/scripts/penpot-selfhost/penpot-manage\\.sh/": {
+    "/penpot-manage\\.sh/": {
       "approve": true,
       "matchCommandLine": false
     }

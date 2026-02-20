@@ -1,20 +1,35 @@
 {
-  "servers": {
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://host.docker.internal:1234/v1"
+      },
+      "models": {
+        "qwen/qwen3-coder-next": {
+          "name": "qwen/qwen3-coder-next"
+        }
+      }
+    }
+  },
+  "mcp": {
     "penpot-official": {
-      "command": "docker",
-      "args": [
+      "type": "local",
+      "command": [ "docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "proxy",
-        "--upstream=http://localhost:4411/mcp",
+        "--upstream=http://localhost:4401/mcp",
         "--name=penpot-official",
         "--skill=/penpot",
         "--tools=execute_code,export_shape,penpot_api_info,high_level_overview"
       ],
-      "type": "stdio"
+      "enabled": true
     },
     "storybook-mcp": {
-      "command": "docker",
-      "args": [
+      "type": "local",
+      "command": [ "docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "proxy",
         "--upstream=http://localhost:6007/mcp",
@@ -23,8 +38,7 @@
         "--no-init",
         "--tools=*"
       ],
-      "type": "stdio"
+      "enabled": true
     }
-  },
-  "inputs": []
+  }
 }

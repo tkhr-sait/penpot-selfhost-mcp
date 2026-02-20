@@ -1,6 +1,6 @@
 services:
   proxy:
-    image: penpot-mcp-proxy
+    image: mcp-proxy
     build:
       context: ..
       dockerfile: mcp-proxy/Dockerfile

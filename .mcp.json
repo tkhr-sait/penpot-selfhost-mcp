@@ -5,7 +5,22 @@
       "args": [
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "proxy",
-        "--upstream=http://localhost:4401/mcp"
+        "--upstream=http://localhost:4401/mcp",
+        "--name=penpot-official",
+        "--skill=/penpot",
+        "--tools=execute_code,export_shape,penpot_api_info,high_level_overview"
+      ]
+    },
+    "storybook-mcp": {
+      "command": "docker",
+      "args": [
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--rm", "-T", "proxy",
+        "--upstream=http://localhost:6007/mcp",
+        "--name=storybook-mcp",
+        "--skill=/penpot",
+        "--no-init",
+        "--tools=*"
       ]
     }
   }
