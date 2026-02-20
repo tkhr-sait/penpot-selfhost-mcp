@@ -21,8 +21,6 @@ Style Dictionary（変換）
 Storybook（コンポーネント開発・カタログ）
    ↓
 Lost Pixel（ビジュアルリグレッションテスト）
-   ↓
-ドキュメントサイト（Astro Starlight）
 ```
 
 ## 実ディレクトリ構成
@@ -45,7 +43,10 @@ Lost Pixel（ビジュアルリグレッションテスト）
 │   └── ...
 ├── .storybook/
 │   ├── main.js
-│   └── preview.js                   ← import '../build/css/variables.css'
+│   ├── preview.js                   ← import '../build/css/variables.css'
+│   └── vitest.setup.js              ← a11y アドオンの setProjectAnnotations
+├── .lostpixel/
+│   └── baseline/                    ← ベースライン画像（コミット対象）
 ├── storybook-static/                ← Storybook ビルド出力 → Docker マウント
 ├── style-dictionary.config.js
 ├── package.json
@@ -63,6 +64,8 @@ Lost Pixel（ビジュアルリグレッションテスト）
 | `storybook` | `storybook dev -p 6007` | Storybook dev サーバー |
 | `storybook:build` | `storybook build` | Storybook 静的ビルド |
 | `storybook:deploy` | `npm run tokens:build && npm run tokens:audit && npm run storybook:build` | 一括ビルド（監査含む） |
+| `vrt` | `lost-pixel` | VRT: ベースラインと比較（差分で exit 1） |
+| `vrt:update` | `lost-pixel update` | VRT: ベースライン更新 |
 
 ## パイプライン一覧
 
@@ -71,8 +74,7 @@ Lost Pixel（ビジュアルリグレッションテスト）
 | 01 | MCP (token-sync.js) | Penpot ↔ リポジトリのトークン同期 | [01-token-sync.md](01-token-sync.md) |
 | 02 | Style Dictionary | JSON → CSS 変数 / SCSS / Tailwind config | [02-style-dictionary.md](02-style-dictionary.md) |
 | 03 | Storybook | コンポーネント開発・カタログ | [03-storybook.md](03-storybook.md) |
-| 04 | Astro Starlight | デザインシステムドキュメントサイト | [04-docs.md](04-docs.md) |
-| 05 | Lost Pixel | ビジュアルリグレッションテスト | [05-vrt.md](05-vrt.md) |
+| 04 | Lost Pixel | ビジュアルリグレッションテスト | [04-vrt.md](04-vrt.md) |
 
 ## MCP 統合ポイント
 
@@ -89,12 +91,13 @@ Lost Pixel（ビジュアルリグレッションテスト）
 
 ## 最小構成
 
-**Pipeline 01 + 02 + 03**（トークン同期 + Style Dictionary + Storybook）でデザインシステムの基本的な運用が回る。Pipeline 04-05 はチーム規模やプロダクトの成熟度に応じて追加。
+**Pipeline 01 + 02 + 03**（トークン同期 + Style Dictionary + Storybook）でデザインシステムの基本的な運用が回る。
+
+Pipeline 04（Lost Pixel VRT）はトークン変更の視覚的影響を検証する品質ゲートとして推奨。ローカル環境で完結し、外部サービス不要（`generateOnly: true`）。
 
 ## 参考リンク
 
 - [Design Tokens with Penpot](https://penpot.app/blog/design-tokens-with-penpot/) — Penpot 公式トークンチュートリアル
 - [Style Dictionary GitHub](https://github.com/amzn/style-dictionary) — Style Dictionary 公式
 - [Lost Pixel GitHub](https://github.com/lost-pixel/lost-pixel) — Lost Pixel 公式
-- [Astro Starlight](https://starlight.astro.build/) — Starlight ドキュメントテーマ
 - [W3C Design Tokens Community Group](https://www.designtokens.org/) — トークン標準仕様

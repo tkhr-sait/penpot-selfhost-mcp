@@ -23,7 +23,7 @@ x-flags: &penpot-flags
     disable-secure-session-cookies
     enable-access-tokens
     disable-telemetry
-    enable-air-gapped-conf
+#    enable-air-gapped-conf
 
 x-uri: &penpot-public-uri
   PENPOT_PUBLIC_URI: ${PENPOT_PUBLIC_URI:-http://localhost:9001}
@@ -37,7 +37,7 @@ x-secret-key: &penpot-secret-key
 
 services:
   penpot-frontend:
-    image: penpotapp/frontend:${PENPOT_VERSION:-2.13.2}
+    image: penpotapp/frontend:${PENPOT_VERSION:-2.13.3}
     restart: unless-stopped
     ports:
       - "${PENPOT_PORT:-9001}:8080"
@@ -59,7 +59,7 @@ services:
       - penpot
 
   penpot-backend:
-    image: penpotapp/backend:${PENPOT_VERSION:-2.13.2}
+    image: penpotapp/backend:${PENPOT_VERSION:-2.13.3}
     restart: unless-stopped
     volumes:
       - penpot_assets:/opt/data/assets
@@ -87,7 +87,7 @@ services:
       - penpot
 
   penpot-exporter:
-    image: penpotapp/exporter:${PENPOT_VERSION:-2.13.2}
+    image: penpotapp/exporter:${PENPOT_VERSION:-2.13.3}
     restart: unless-stopped
     depends_on:
       penpot-valkey:
@@ -231,7 +231,7 @@ services:
   # Project Storybook (serves built storybook-static from workspace root)
   # profile: storybook — デフォルト起動から除外。storybook-static/ 存在時のみ起動
   penpot-storybook:
-    image: penpotapp/storybook:${PENPOT_VERSION:-2.13.2}
+    image: penpotapp/storybook:${PENPOT_VERSION:-2.13.3}
     profiles: [storybook]
     restart: unless-stopped
     ports:

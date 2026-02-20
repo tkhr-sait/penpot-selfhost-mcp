@@ -76,6 +76,67 @@ export default {
 - ESM: `package.json` に `"type": "module"` がないと警告が出る
 - JSX ファイルに `import React from 'react'` は不要（`react()` プラグインが自動ランタイムを有効化）
 
+## .storybook/ 設定ファイル
+
+### main.js
+
+```javascript
+const config = {
+  stories: [
+    "../stories/**/*.mdx",
+    "../stories/**/*.stories.@(js|jsx|mjs|ts|tsx)",
+  ],
+  addons: [
+    "@chromatic-com/storybook",
+    "@storybook/addon-vitest",
+    "@storybook/addon-a11y",
+    "@storybook/addon-docs",
+    "@storybook/addon-onboarding",
+    {
+      name: "@storybook/addon-mcp",
+      options: { toolsets: { dev: true, docs: true } },
+    },
+  ],
+  framework: "@storybook/react-vite",
+  features: {
+    experimentalComponentsManifest: true,
+  },
+};
+```
+
+- `@storybook/addon-mcp` — Storybook MCP サーバー統合アドオン（Claude Code / Copilot の Storybook MCP と連携）
+- `experimentalComponentsManifest: true` — コンポーネントマニフェスト生成の実験的機能を有効化
+
+### preview.js
+
+```javascript
+import '../build/css/variables.css';
+
+export default {
+  parameters: {
+    a11y: { test: "todo" },
+  },
+};
+```
+
+| `a11y.test` 値 | 動作 |
+|-----------------|------|
+| `"todo"` | a11y 違反をテスト UI に表示（CI は失敗しない） |
+| `"error"` | a11y 違反で CI 失敗 |
+| `"off"` | a11y チェックを完全スキップ |
+
+### vitest.setup.js
+
+```javascript
+import * as a11yAddonAnnotations from "@storybook/addon-a11y/preview";
+import { setProjectAnnotations } from '@storybook/react-vite';
+import * as projectAnnotations from './preview';
+
+setProjectAnnotations([a11yAddonAnnotations, projectAnnotations]);
+```
+
+`setProjectAnnotations` により、a11y アドオンのアノテーションと preview.js のパラメータが vitest 実行時にも適用される。
+
 ## CSS トークン使用ルール
 
 ### 原則
@@ -185,6 +246,8 @@ export default {
 | `storybook:build` | `storybook build` | 静的ビルド → `storybook-static/` |
 | `tokens:audit` | `! grep ... \| grep -v 'ds-ignore' \| grep .` | CSS ハードコード値検出（失敗で exit 1） |
 | `storybook:deploy` | `npm run tokens:build && npm run tokens:audit && npm run storybook:build` | 一括: トークンビルド → 監査 → Storybook ビルド |
+| `vrt` | `lost-pixel` | VRT: ベースラインと比較（差分あれば exit 1）→ [04-vrt.md](04-vrt.md) |
+| `vrt:update` | `lost-pixel update` | VRT: ベースライン更新 → [04-vrt.md](04-vrt.md) |
 
 ```json
 {
@@ -192,7 +255,9 @@ export default {
     "storybook": "storybook dev -p 6007",
     "storybook:build": "storybook build",
     "tokens:audit": "! grep -n -E ':\\s*[0-9]+(px|rem|em)' stories/*.css | grep -v -E 'var\\(--ds-' | grep -v -E '(width|height|min-width|min-height|max-width|max-height):\\s*[0-9]' | grep -v 'ds-ignore' | grep .",
-    "storybook:deploy": "npm run tokens:build && npm run tokens:audit && npm run storybook:build"
+    "storybook:deploy": "npm run tokens:build && npm run tokens:audit && npm run storybook:build",
+    "vrt:update": "lost-pixel update",
+    "vrt": "lost-pixel"
   }
 }
 ```
@@ -217,4 +282,5 @@ export default {
 2. Pipeline 01 でエクスポート → リポジトリにコミット
 3. Pipeline 02 で Style Dictionary ビルド → CSS 変数再生成
 4. Storybook をビルド → 変更が反映される
+5. npm run vrt → 差分がないことを確認（Pipeline 04 参照）
 ```

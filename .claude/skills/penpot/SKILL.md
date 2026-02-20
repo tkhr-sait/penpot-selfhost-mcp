@@ -41,15 +41,14 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 | トークン同期 / DTCG | [外部パイプライン](#外部パイプライン)（01） | [mcp-api.md](reference/mcp-api.md), [pipeline/01-token-sync.md](reference/pipeline/01-token-sync.md), [token-sync.js](scripts/mcp-snippets/token-sync.js) |
 | SD / CSS変数 / SCSS | 外部パイプライン（02） | [pipeline/02-style-dictionary.md](reference/pipeline/02-style-dictionary.md) |
 | Storybook | 外部パイプライン（03） | [pipeline/03-storybook.md](reference/pipeline/03-storybook.md) |
-| ドキュメント / Astro | 外部パイプライン（04） | [pipeline/04-docs.md](reference/pipeline/04-docs.md) |
-| VRT / Lost Pixel | 外部パイプライン（05） | [pipeline/05-vrt.md](reference/pipeline/05-vrt.md) |
+| VRT / Lost Pixel | 外部パイプライン（04） | [pipeline/04-vrt.md](reference/pipeline/04-vrt.md) |
 | パイプライン / 外部連携 | 外部パイプライン（全体） | [pipeline/overview.md](reference/pipeline/overview.md) |
 | コメント / レビュー | [コメント管理](#コメント管理) | [mcp-api.md](reference/mcp-api.md), [comments.md](reference/comments.md) |
 | その他 | 引数内容に応じて判断 | — |
 
 ## サポートファイル一覧
 
-**リファレンス**: [selfhost.md](reference/selfhost.md) | [mcp-api.md](reference/mcp-api.md) | [comments.md](reference/comments.md) | [design.md](reference/design.md) | [workflow/phase-01〜08](reference/workflow/) | [library-architecture.md](reference/library-architecture.md) | [pipeline/overview + 01〜05](reference/pipeline/)
+**リファレンス**: [selfhost.md](reference/selfhost.md) | [mcp-api.md](reference/mcp-api.md) | [comments.md](reference/comments.md) | [design.md](reference/design.md) | [workflow/phase-01〜08](reference/workflow/) | [library-architecture.md](reference/library-architecture.md) | [pipeline/overview + 01〜04](reference/pipeline/)
 
 **スクリプト**: [penpot-manage.sh](scripts/penpot-selfhost/penpot-manage.sh) | [penpot-init.js](scripts/mcp-snippets/penpot-init.js) | [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) | [validate-design.js](scripts/mcp-snippets/validate-design.js) | [token-sync.js](scripts/mcp-snippets/token-sync.js) | [token-utils.js](scripts/mcp-snippets/token-utils.js)
 
@@ -157,7 +156,7 @@ Penpot のデザインをもとにアプリケーションコードを生成す�
 - `style-dictionary.config.*` なし → Pipeline 02（SD セットアップから）
 - `build/css/` なし → Pipeline 02（SD ビルドから）
 - Storybook 未起動 → Pipeline 03
-- 全完了 → Pipeline 04 or 05
+- 全完了 → Pipeline 04
 
 該当 Pipeline のファイルを Read し手順に従う。トークン操作時は [token-sync.js](scripts/mcp-snippets/token-sync.js) を Read → `mcp__penpot-official__execute_code` で初期化。
 
