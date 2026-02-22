@@ -7,11 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { readFileSync, existsSync } from "node:fs";
 
 // --- CLI argument parsing ---
 function getArg(name, def) {
@@ -19,19 +15,27 @@ function getArg(name, def) {
   return a ? a.split("=").slice(1).join("=") : def;
 }
 const hasFlag = (name) => process.argv.includes(`--${name}`);
+const env = (key, def) => process.env[key] || def;
 
-const UPSTREAM_URL = getArg("upstream", "http://localhost:4401/mcp");
-const SERVER_NAME = getArg("name", "penpot-official");
-const SKILL_NAME = getArg("skill", ""); // e.g. "/penpot"
+// --- Configuration (CLI > env > default) ---
+const UPSTREAM_URL = getArg("upstream", "") || env("MCP_UPSTREAM", "");
+if (!UPSTREAM_URL) {
+  console.error("[mcp-proxy] --upstream=URL or MCP_UPSTREAM is required");
+  process.exit(1);
+}
+const SERVER_NAME = getArg("name", "") || env("MCP_NAME", "mcp-proxy");
+const SKILL_NAME = getArg("skill", "") || env("MCP_SKILL", "");
 const GATE_ENABLED = !!SKILL_NAME;
-const NO_INIT = hasFlag("no-init");
+
+const NO_INIT =
+  hasFlag("no-init") || env("MCP_NO_INIT", "") === "true";
 const INIT_SCRIPT = NO_INIT
   ? null
-  : resolve(__dirname, "../mcp-snippets/penpot-init.js");
-const TOOLS_ARG = getArg(
-  "tools",
-  "execute_code,export_shape,penpot_api_info,high_level_overview"
-);
+  : getArg("init-script", "") || env("MCP_INIT_SCRIPT", "") || null;
+const INIT_TOOL =
+  getArg("init-tool", "") || env("MCP_INIT_TOOL", "execute_code");
+
+const TOOLS_ARG = getArg("tools", "") || env("MCP_TOOLS", "*");
 const TOOL_WILDCARD = TOOLS_ARG === "*";
 const TOOL_LIST = TOOL_WILDCARD
   ? []
@@ -78,14 +82,20 @@ async function connectUpstream() {
 
 // --- Auto-init (re-run on reconnect) ---
 async function autoInit(force = false) {
-  if (NO_INIT) {
+  if (!INIT_SCRIPT) {
     initDone = true;
     return;
   }
   if (initDone && !force) return;
+  if (!existsSync(INIT_SCRIPT)) {
+    console.error(`[mcp-proxy] Init script not found: ${INIT_SCRIPT}`);
+    console.error("[mcp-proxy] Check volume mount or --init-script path.");
+    initDone = true;
+    return;
+  }
   const code = readFileSync(INIT_SCRIPT, "utf-8");
   const result = await upstream.callTool({
-    name: "execute_code",
+    name: INIT_TOOL,
     arguments: { code },
   });
   if (!result.isError) initDone = true;
@@ -104,6 +114,7 @@ const server = new Server(
 
 // --- Upstream tools schema cache ---
 let upstreamToolsCache = null;
+let schemaFetchAttempted = false;
 
 async function cacheUpstreamTools() {
   const result = await upstream.listTools();
@@ -113,13 +124,26 @@ async function cacheUpstreamTools() {
   }
 }
 
+// Eagerly fetch upstream schemas (best-effort, no gate unlock)
+async function ensureSchemaCache() {
+  if (upstreamToolsCache || schemaFetchAttempted) return;
+  schemaFetchAttempted = true;
+  try {
+    const client = await connectUpstream();
+    upstream = client;
+    await cacheUpstreamTools();
+  } catch {
+    // Upstream not ready yet — fall back to placeholder schemas
+  }
+}
+
 // --- Tool definitions ---
 const ACTIVATE_TOOL = {
   name: "activate",
   description:
     `${SERVER_NAME} MCP セッションを開始/再接続する。` +
     (SKILL_NAME ? `\n${SKILL_NAME} スキルロード後に呼び出すこと。` : "") +
-    (NO_INIT ? "" : "\n初期化スクリプトを自動実行。"),
+    (NO_INIT || !INIT_SCRIPT ? "" : "\n初期化スクリプトを自動実行。"),
   inputSchema: { type: "object", properties: {} },
 };
 
@@ -141,6 +165,9 @@ const FALLBACK_TOOLS = buildFallbackTools();
 
 // --- tools/list ---
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // Eagerly fetch real schemas on first tools/list call
+  await ensureSchemaCache();
+
   const tools = [];
 
   if (GATE_ENABLED) {
@@ -182,6 +209,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   // --- activate (idempotent, gate mode only) ---
   if (name === "activate") {
     if (unlocked && upstream !== null) {
+      // Notify Claude Code to re-fetch tool schemas (may be stale from fallback)
+      await server.sendToolListChanged();
       return {
         content: [{ type: "text", text: "Already activated." }],
       };
@@ -191,6 +220,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       await cacheUpstreamTools();
       await autoInit(!initDone ? false : true);
       unlocked = true;
+      // Notify Claude Code that real tool schemas are now available
+      await server.sendToolListChanged();
       return {
         content: [
           { type: "text", text: `${SERVER_NAME} MCP activated. Ready.` },

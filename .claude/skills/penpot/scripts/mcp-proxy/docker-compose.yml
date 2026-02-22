@@ -2,6 +2,26 @@ services:
   proxy:
     image: mcp-proxy
     build:
-      context: ..
-      dockerfile: mcp-proxy/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     network_mode: host
+
+  # Penpot preset: gate + auto-init（activate 必須）
+  penpot-proxy:
+    extends:
+      service: proxy
+    volumes:
+      - ../mcp-snippets/penpot-init.js:/app/init-scripts/penpot-init.js:ro
+    environment:
+      MCP_NAME: penpot-official
+      MCP_SKILL: /penpot
+      MCP_TOOLS: execute_code,export_shape,penpot_api_info,high_level_overview
+      MCP_INIT_SCRIPT: /app/init-scripts/penpot-init.js
+      MCP_INIT_TOOL: execute_code
+
+  # Storybook preset: transparent（activate 不要）
+  storybook-proxy:
+    extends:
+      service: proxy
+    environment:
+      MCP_NAME: storybook-mcp

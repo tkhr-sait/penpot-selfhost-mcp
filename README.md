@@ -111,8 +111,8 @@ MCP サーバーは [Penpot 公式リポジトリ](https://github.com/penpot/pen
 - [Creating a Penpot Design Tokens Format with Style Dictionary](https://www.alwaystwisted.com/articles/a-design-tokens-workflow-part-12) — Style Dictionary と Penpot の連携ガイド
 - [Style Dictionary](https://github.com/amzn/style-dictionary) — トークン変換ツール
 - [W3C Design Tokens Community Group](https://www.designtokens.org/) — トークン標準仕様
-- [Astro Starlight](https://starlight.astro.build/) — ドキュメントサイトテーマ（将来予定）
-- [Lost Pixel](https://github.com/lost-pixel/lost-pixel) — ビジュアルリグレッションテスト（将来予定）
+- [Storybook](https://storybook.js.org/) - コンポーネント管理
+- [Lost Pixel](https://github.com/lost-pixel/lost-pixel) — ビジュアルリグレッションテスト
 
 ## License
 

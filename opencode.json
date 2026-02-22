@@ -17,26 +17,19 @@
   "mcp": {
     "penpot-official": {
       "type": "local",
-      "command": [ "docker",
+      "command": ["docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
-        "run", "--rm", "-T", "proxy",
-        "--upstream=http://localhost:4401/mcp",
-        "--name=penpot-official",
-        "--skill=/penpot",
-        "--tools=execute_code,export_shape,penpot_api_info,high_level_overview"
+        "run", "--rm", "-T", "penpot-proxy",
+        "--upstream=http://localhost:4401/mcp"
       ],
       "enabled": true
     },
     "storybook-mcp": {
       "type": "local",
-      "command": [ "docker",
+      "command": ["docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
-        "run", "--rm", "-T", "proxy",
-        "--upstream=http://localhost:6007/mcp",
-        "--name=storybook-mcp",
-        "--skill=/penpot",
-        "--no-init",
-        "--tools=*"
+        "run", "--rm", "-T", "storybook-proxy",
+        "--upstream=http://localhost:6007/mcp"
       ],
       "enabled": true
     }
