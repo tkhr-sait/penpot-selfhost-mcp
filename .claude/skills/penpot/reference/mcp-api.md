@@ -74,12 +74,40 @@ penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_ov
 - `addSet()` 戻り値は即時読取不可 → `catalog.sets.find()` で再取得
 - 大量操作は 10件バッチ + 200ms sleep（WebSocket 切断対策。切断しても MCP 再接続は不要、自動復帰）
 
+### テーマ管理
+- `catalog.addTheme('group', 'name')` でテーマ作成（引数は2つの文字列、オブジェクトではない）
+- `theme.addSet(setObj)` でテーマにセットを関連付け
+- **⚠ `theme.toggleActive()` は WebSocket 切断を引き起こす** — 使用禁止。テーマ切替はセット単位で `set.active = true/false` を使う
+- **⚠ `theme.activeSets` は常に null** — テーマ→セット関連の読み取りは不可
+
+### テーマ切替（セットの active 制御）
+- **セット作成順序に注意**: Shared（ベース）セットを最初に作成し、テーマ固有セット（Dark/Light）を後に作成すること。
+  `catalog.sets` の順序でトークン優先度が決まり、後のセットが優先される。
+  `theme.addSet()` の呼び出し順序は優先度に影響しない（カタログ順のみが関係する）。
+- 同名トークン（例: `color.bg.primary`）を Dark/Light 両セットに定義
+- `set.active = true/false` でセットの有効/無効を切替
+- 複数セットが同名トークンを持つ場合、**カタログ順で後のセットが優先**
+- テーマ切替パターン:
+  ```javascript
+  // Dark テーマ表示
+  darkSet.active = true; lightSet.active = false; sharedSet.active = true;
+  // Light テーマ表示
+  darkSet.active = false; lightSet.active = true; sharedSet.active = true;
+  ```
+- Light 用に別コンポーネントを手作りする必要はない — 同じコンポーネントにトークン適用し、セット切替で対応
+
 ### インタラクション
 - 同一ページ内のボード間のみ有効（異なるページ間は動作しない）
 - `shape.addInteraction(trigger, action, delay?)` で追加
-- NavigateTo: `{ type: 'navigate-to', destination: targetBoard }`
-- OpenOverlay: `{ type: 'open-overlay', destination: overlayBoard, position: 'center', ... }`
-- CloseOverlay: `{ type: 'close-overlay' }`
+- **動作する Action**:
+  - NavigateTo: `{ type: 'navigate-to', destination: targetBoard }`
+  - CloseOverlay: `{ type: 'close-overlay' }`
+  - PreviousScreen: `{ type: 'previous-screen' }`
+  - OpenUrl: `{ type: 'open-url', url: '...' }`
+- **⚠ Plugin API で未実装（型定義のみ存在）**:
+  - OpenOverlay: `addInteraction` が `undefined` を返し保存されない
+  - ToggleOverlay: 同上
+  - **回避策**: `navigate-to` で設定後、Penpot UI で手動で OpenOverlay に変更
 - API 型は `mcp__penpot-official__penpot_api_info` で確認
 
 ### 全般

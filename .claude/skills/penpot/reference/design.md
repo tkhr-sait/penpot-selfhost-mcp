@@ -115,6 +115,15 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 ### API 制約
 - MCP システムプロンプト（`mcp__penpot-official__high_level_overview`）を必ず遵守（insertChild、growType、Flex順序等）
 
+## テーマ切替戦略
+
+ダーク/ライトテーマの切替は **トークンセットの active 制御** で実現する。同名トークンを複数セットに定義し、セットの有効/無効を切り替えることで、同一コンポーネントのまま見た目を変更できる。
+
+- Light 用に別コンポーネントを手作りする必要はない
+- 同じコンポーネントにトークンを適用し、セット切替で対応
+- テーマ非依存のトークン（spacing, borderRadius 等）は Shared セットにまとめる
+- 詳細な API 制約・コード例は [mcp-api.md](mcp-api.md) の「テーマ管理」「テーマ切替」セクションを参照
+
 ## セマンティックカラートークン
 
 ネイティブデザイントークンとして定義する14色。`token-utils.js` 初期化後、`storage.applyTokenSafe()` で安全に適用する。

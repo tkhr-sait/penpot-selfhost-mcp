@@ -140,6 +140,8 @@ storage.exportTokensDTCG = () => {
     dtcg.$themes = themes.map(theme => ({
       name: theme.name,
       group: theme.group,
+      // ⚠ theme.activeSets は現在常に null を返す（Plugin API の制限）
+      // セット関連はエクスポートされない。インポート時にテーマ→セット再構築が必要
       sets: (theme.activeSets || []).map(s => s.name)
     }));
   }
