@@ -123,6 +123,11 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 - Light 用に別コンポーネントを手作りする必要はない
 - 同じコンポーネントにトークンを適用し、セット切替で対応
 - テーマ非依存のトークン（spacing, borderRadius 等）は Shared セットにまとめる
+- **永続化の制約**: Plugin API の `set.active` はサーバーに永続化されない（ページリロードで失われる）。
+  永続的なテーマ切替には `storage.switchThemePersistent()` を使用する:
+  ```javascript
+  await storage.switchThemePersistent(['Shared', 'Dark'], ['Light']);
+  ```
 - 詳細な API 制約・コード例は [mcp-api.md](mcp-api.md) の「テーマ管理」「テーマ切替」セクションを参照
 
 ## セマンティックカラートークン

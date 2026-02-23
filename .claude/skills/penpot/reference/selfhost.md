@@ -44,7 +44,19 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | `/api-proxy` | POST | REST API プロキシ（`{ command, params }` → Cookie 認証でバックエンドへ転送） |
 | `/api-proxy` | GET | 読み取り専用 REST API プロキシ（`?command=...&key=val`） |
 | `/navigate` | POST | ファイル切替（`{ projectId, fileId }` → Playwright でワークスペース遷移 + プラグイン再接続） |
+| `/token-theme` | POST | トークンセット管理（Playwright UI 自動化で永続化。下記参照） |
 | `/status` | GET | ナビゲーション状態（`ready` / `navigating` / `reconnecting` / `error`） |
+
+##### `/token-theme` アクション
+
+Plugin API の `set.active` はサーバーに永続化されないため、Playwright で Penpot UI を操作してトークンセットの active 状態を変更する。
+
+| アクション | リクエストボディ | 説明 |
+|---|---|---|
+| `toggle-set` | `{ action: "toggle-set", setName: string, active: boolean }` | 指定セットの active/inactive を切替 |
+| `list-sets` | `{ action: "list-sets" }` | 全セットの名前と active 状態を返却 |
+
+`penpot-init.js` の `storage.toggleSetPersistent()` / `storage.switchThemePersistent()` がこのエンドポイントを内部で使用する。
 
 #### アクセス経路
 

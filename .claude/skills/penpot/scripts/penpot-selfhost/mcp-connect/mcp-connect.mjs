@@ -621,6 +621,159 @@ async function reconnectPlugin(page) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Token Theme UI Automation via Playwright
+// ---------------------------------------------------------------------------
+
+/**
+ * Open the Design Tokens panel in the left sidebar.
+ * Idempotent — if the panel is already visible, this is a no-op.
+ *
+ * Penpot 2.x DOM structure:
+ *   Tab button:    button[title="Tokens"]  (class: ...tab_switcher__tab)
+ *   Sets list:     div[class*="sets-list"] (class: ...sets_lists__sets-list)
+ *   Set item:      div[data-testid="tokens-set-item"][id="token-set-item-{name}"]
+ *   Set checkbox:  div[role="checkbox"][aria-checked="true"|"false"]
+ *   Set name:      div[class*="set-name"]
+ */
+async function openTokensPanel(page) {
+  // Quick check: are token-set elements already visible?
+  const isOpen = await page.evaluate(() => {
+    // Primary: data-testid selector (most stable)
+    const items = document.querySelectorAll('[data-testid="tokens-set-item"]');
+    if (items.length > 0 && Array.from(items).some(el => el.offsetParent !== null)) return true;
+    // Fallback: class-based selector
+    const els = document.querySelectorAll('[class*="sets-list"], [class*="token-set"]');
+    return Array.from(els).some(el => el.offsetParent !== null);
+  });
+  if (isOpen) return;
+
+  // Find and click the Tokens tab in the left sidebar.
+  // Penpot left sidebar tabs use title="Tokens" (or localized equivalent).
+  const found = await page.evaluate(() => {
+    // Strategy 1: button[title="Tokens"] (exact match, fastest)
+    const exact = document.querySelector('button[title="Tokens"]');
+    if (exact && exact.offsetParent !== null) { exact.click(); return 'exact'; }
+    // Strategy 2: title contains "token" (case-insensitive, i18n fallback)
+    const btns = document.querySelectorAll('button, [role="tab"]');
+    for (const btn of btns) {
+      const t = (btn.title || btn.getAttribute('aria-label') || '').toLowerCase();
+      if (t.includes('token') && btn.offsetParent !== null) {
+        btn.click();
+        return 'title';
+      }
+    }
+    return null;
+  });
+  if (!found) {
+    throw new Error(
+      'Design Tokens tab not found. Ensure the file has Design Tokens enabled.'
+    );
+  }
+  await sleep(800);
+}
+
+/**
+ * Toggle a token set's active/inactive state via Penpot UI.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} setName  Exact name of the token set
+ * @param {boolean} active  Desired active state
+ * @returns {Promise<{toggled: boolean, setName: string, active: boolean}>}
+ */
+async function toggleTokenSet(page, setName, active) {
+  await openTokensPanel(page);
+
+  const result = await page.evaluate(({ name, desired }) => {
+    // Strategy 1: Use stable id="token-set-item-{name}" selector
+    const item = document.getElementById(`token-set-item-${name}`);
+    if (item) {
+      const cb = item.querySelector('[role="checkbox"]');
+      if (cb) {
+        const cur = cb.getAttribute('aria-checked') === 'true';
+        if (cur === desired) {
+          return { toggled: false, setName: name, active: desired };
+        }
+        cb.click();
+        return { toggled: true, setName: name, active: desired };
+      }
+      return { error: `Checkbox not found in set item "${name}"` };
+    }
+
+    // Strategy 2: Fallback — walk text nodes to find set name
+    const walker = document.createTreeWalker(
+      document.body, NodeFilter.SHOW_TEXT
+    );
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.textContent.trim() !== name) continue;
+      let el = node.parentElement;
+      for (let i = 0; i < 8 && el; i++) {
+        const cb = el.querySelector('[role="checkbox"], input[type="checkbox"]');
+        if (cb) {
+          const cur = cb.checked || cb.getAttribute('aria-checked') === 'true';
+          if (cur === desired) {
+            return { toggled: false, setName: name, active: desired };
+          }
+          cb.click();
+          return { toggled: true, setName: name, active: desired };
+        }
+        el = el.parentElement;
+      }
+      return { error: `No checkbox found near set "${name}"` };
+    }
+    return { error: `Token set "${name}" not found in UI` };
+  }, { name: setName, desired: active });
+
+  if (result.error) throw new Error(result.error);
+  await sleep(500); // Wait for Penpot to process the state change
+  log(`[token-theme] toggle-set: ${setName} → active=${active} (toggled=${result.toggled})`);
+  return result;
+}
+
+/**
+ * List all token sets and their active state from the Design Tokens panel.
+ * @returns {Promise<Array<{name: string, active: boolean}>>}
+ */
+async function listTokenSets(page) {
+  await openTokensPanel(page);
+
+  const sets = await page.evaluate(() => {
+    const results = [];
+    // Primary: data-testid="tokens-set-item" (stable selector)
+    const items = document.querySelectorAll('[data-testid="tokens-set-item"]');
+    if (items.length > 0) {
+      for (const item of items) {
+        const nameEl = item.querySelector('[class*="set-name"]');
+        const name = nameEl?.textContent?.trim() || item.textContent?.trim();
+        if (!name || name.length > 80) continue;
+        const cb = item.querySelector('[role="checkbox"]');
+        const active = cb ? cb.getAttribute('aria-checked') === 'true' : false;
+        results.push({ name, active });
+      }
+      return results;
+    }
+    // Fallback: class-based selector
+    const candidates = document.querySelectorAll(
+      '[class*="set"] [role="checkbox"], [class*="set"] input[type="checkbox"]'
+    );
+    const seen = new Set();
+    for (const cb of candidates) {
+      const row = cb.closest('[class*="set-item"]') || cb.parentElement?.parentElement;
+      if (!row) continue;
+      const name = row.textContent?.trim();
+      if (!name || name.length > 80 || seen.has(name)) continue;
+      seen.add(name);
+      const active = cb.checked || cb.getAttribute('aria-checked') === 'true';
+      results.push({ name, active });
+    }
+    return results;
+  });
+
+  log(`[token-theme] list-sets: ${sets.length} sets found`);
+  return sets;
+}
+
 /**
  * Start the bridge HTTP server on port 3000.
  *
@@ -628,12 +781,14 @@ async function reconnectPlugin(page) {
  * browser session managed by Playwright, providing:
  *   - REST API proxy with browser cookie authentication
  *   - File navigation (Playwright-driven) with automatic plugin reconnection
+ *   - Token set management via Playwright UI automation
  *
  * Endpoints:
- *   POST /api-proxy   { command, params }     → Proxy POST to Penpot REST API (browser cookie auth)
- *   GET  /api-proxy?command=...&key=val       → Proxy GET to Penpot REST API (browser cookie auth)
- *   POST /navigate    { projectId, fileId }   → Playwright navigation + plugin reconnect
- *   GET  /status      → { status: 'ready' | 'navigating' | 'reconnecting' | 'error' }
+ *   POST /api-proxy    { command, params }          → Proxy POST to Penpot REST API (browser cookie auth)
+ *   GET  /api-proxy?command=...&key=val             → Proxy GET to Penpot REST API (browser cookie auth)
+ *   POST /navigate     { projectId, fileId }        → Playwright navigation + plugin reconnect
+ *   POST /token-theme  { action, ...params }        → Token set toggle/list via Playwright UI
+ *   GET  /status       → { status: 'ready' | 'navigating' | 'reconnecting' | 'error' }
  */
 function startBridgeServer(page) {
   const server = http.createServer(async (req, res) => {
@@ -712,6 +867,60 @@ function startBridgeServer(page) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Invalid query parameters" }));
       }
+      return;
+    }
+
+    // POST /token-theme — Token set management via Playwright UI automation
+    if (req.method === "POST" && req.url === "/token-theme") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", async () => {
+        try {
+          const { action, ...params } = JSON.parse(body);
+
+          if (navigationStatus !== "ready") {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+              error: `Bridge is busy (status: ${navigationStatus}). Retry after navigation completes.`,
+            }));
+            return;
+          }
+
+          try {
+            let result;
+            switch (action) {
+              case "toggle-set":
+                if (!params.setName || typeof params.active !== "boolean") {
+                  res.writeHead(400, { "Content-Type": "application/json" });
+                  res.end(JSON.stringify({
+                    error: "toggle-set requires setName (string) and active (boolean)",
+                  }));
+                  return;
+                }
+                result = await toggleTokenSet(page, params.setName, params.active);
+                break;
+              case "list-sets":
+                result = await listTokenSets(page);
+                break;
+              default:
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({
+                  error: `Unknown action: ${action}. Supported: toggle-set, list-sets`,
+                }));
+                return;
+            }
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            log(`[token-theme] ${action} failed: ${err.message}`);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        } catch {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Invalid JSON body" }));
+        }
+      });
       return;
     }
 

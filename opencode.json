@@ -10,7 +10,13 @@
       "models": {
         "qwen/qwen3-coder-next": {
           "name": "qwen/qwen3-coder-next"
-        }, 
+        },
+        "unsloth/minimax-m2.5": {
+          "name": "minimax-m2.5"
+        },
+        "unsloth/qwen3-coder-next": {
+          "name": "qwen3-coder-next"
+        },
         "openai/gpt-oss-120b": {
           "name": "openai/gpt-oss-120b"
         },

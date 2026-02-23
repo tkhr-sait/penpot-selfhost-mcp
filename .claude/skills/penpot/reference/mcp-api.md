@@ -48,6 +48,8 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 | `storage.createText()` | `penpot.createText()` | fontFamily 未設定→0x0テキスト（エアギャップ環境） |
 | `storage.createAndOpenPage()` | `penpot.createPage()`+`openPage()` | 切替検証・Page 1 再利用 |
 | `storage.connectLibrary()` | `penpot.library.connectLibrary()` | 返り値 name:null, components:[] 問題 |
+| `storage.toggleSetPersistent()` | `set.active = bool` | set.active は永続化されない（UI 自動化で回避） |
+| `storage.switchThemePersistent()` | （対応なし） | 複数セットの永続的テーマ切替 |
 
 > activate レスポンスにも同じ対応表が含まれる。
 
@@ -92,19 +94,40 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 - **⚠ `theme.toggleActive()` は WebSocket 切断を引き起こす** — 使用禁止。テーマ切替はセット単位で `set.active = true/false` を使う
 - **⚠ `theme.activeSets` は常に null** — テーマ→セット関連の読み取りは不可
 
+#### Plugin API 永続化制約
+
+| 操作 | Plugin API 内 | サーバー永続化 |
+|------|--------------|---------------|
+| `catalog.addSet()` | OK | **OK** |
+| `set.addToken()` | OK | **OK** |
+| `catalog.addTheme()` | OK | **OK** |
+| `theme.addSet()` | OK | **NG**（セッション限定） |
+| `set.active` / `toggleActive()` | OK | **NG**（セッション限定） |
+
+`theme.addSet()` と `set.active` の変更はページリロードで失われる。永続化には Playwright UI 自動化経由の `storage.toggleSetPersistent()` / `storage.switchThemePersistent()` を使用する。
+
 ### テーマ切替（セットの active 制御）
 - **セット作成順序に注意**: Shared（ベース）セットを最初に作成し、テーマ固有セット（Dark/Light）を後に作成すること。
   `catalog.sets` の順序でトークン優先度が決まり、後のセットが優先される。
   `theme.addSet()` の呼び出し順序は優先度に影響しない（カタログ順のみが関係する）。
 - 同名トークン（例: `color.bg.primary`）を Dark/Light 両セットに定義
-- `set.active = true/false` でセットの有効/無効を切替
+- `set.active = true/false` でセットの有効/無効を切替（**セッション限定 — リロードで失われる**）
 - 複数セットが同名トークンを持つ場合、**カタログ順で後のセットが優先**
-- テーマ切替パターン:
+- セッション限定テーマ切替（エクスポート前の一時切替に使用）:
   ```javascript
-  // Dark テーマ表示
+  // Dark テーマ表示（セッション限定 — リロードで失われる）
   darkSet.active = true; lightSet.active = false; sharedSet.active = true;
   // Light テーマ表示
   darkSet.active = false; lightSet.active = true; sharedSet.active = true;
+  ```
+- **永続的なテーマ切替**（推奨 — Playwright UI 自動化経由でサーバーに保存される）:
+  ```javascript
+  // Dark テーマに永続切替
+  await storage.switchThemePersistent(['Shared', 'Dark'], ['Light']);
+  // Light テーマに永続切替
+  await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']);
+  // 個別セット切替
+  await storage.toggleSetPersistent('Dark', true);
   ```
 - Light 用に別コンポーネントを手作りする必要はない — 同じコンポーネントにトークン適用し、セット切替で対応
 

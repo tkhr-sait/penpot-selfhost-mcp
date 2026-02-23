@@ -76,9 +76,18 @@ lightTheme.addSet(lightSet);
 
 // テーマ切替はセットの active で制御
 // ⚠ theme.toggleActive() は WebSocket 切断を起こすため使用禁止
-darkSet.active = true; lightSet.active = false; sharedSet.active = true;  // Dark
-// darkSet.active = false; lightSet.active = true; sharedSet.active = true; // Light
+// ⚠ set.active は永続化されない（ページリロードで失われる）— エクスポート前の一時切替に使用
+darkSet.active = true; lightSet.active = false; sharedSet.active = true;  // Dark（セッション限定）
+// darkSet.active = false; lightSet.active = true; sharedSet.active = true; // Light（セッション限定）
+
+// ■ 永続的なテーマ切替（推奨）— Playwright UI 自動化経由でサーバーに保存
+await storage.switchThemePersistent(['Shared', 'Dark'], ['Light']);   // Dark テーマ
+// await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']); // Light テーマ
 ```
+
+> **永続化の注意**: Plugin API の `set.active` と `theme.addSet()` はサーバーに永続化されない。
+> テーマ切替を永続化する場合は `storage.switchThemePersistent()` または `storage.toggleSetPersistent()` を使用すること。
+> 詳細は [mcp-api.md](../mcp-api.md) の「Plugin API 永続化制約」を参照。
 
 ### スペーシングルール
 `storage.spacing` (xs:4 〜 3xl:64) をプロジェクト標準として定義。

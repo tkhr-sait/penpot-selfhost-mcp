@@ -95,3 +95,6 @@ ENV SHELL=/bin/bash
 #RUN npm install -g @anthropic-ai/claude-code
 RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+
+# Install Opencode
+RUN npm i -g opencode-ai
