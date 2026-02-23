@@ -6,7 +6,8 @@
 //
 // Provides: storage.spacing, storage.createText,
 //           storage.createAndOpenPage, storage.assertCurrentPage,
-//           storage.getFileComments, storage.connectLibrary
+//           storage.getFileComments, storage.connectLibrary,
+//           storage.toggleSetPersistent, storage.switchThemePersistent
 // ============================================================
 
 if (!storage.__initDone) {
@@ -126,19 +127,81 @@ storage.connectLibrary = async (libraryId) => {
   return lib;
 };
 
+// 現在のページのボード一覧を返す（ページ選択後に呼び出す）
+storage.getPageContext = () => {
+  const boards = penpotUtils.findShapes(s => s.type === 'board', penpot.currentPage.root);
+  return {
+    page: { id: penpot.currentPage.id, name: penpot.currentPage.name },
+    boards: boards.map(b => ({ id: b.id, name: b.name, width: b.width, height: b.height })),
+  };
+};
+
+// トークンセットの active 状態を永続的に切替（ブリッジサーバー経由 Playwright UI 自動化）
+// ⚠ Plugin API の set.active は永続化されない。永続化にはこの関数を使用する。
+storage.toggleSetPersistent = async (setName, active) => {
+  const res = await fetch('http://localhost:3000/token-theme', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'toggle-set', setName, active })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(`toggleSetPersistent failed: ${err.error || res.status}`);
+  }
+  return res.json();
+};
+
+// テーマ切替（Dark/Light）— 複数セットの active 状態を一括で永続的に変更
+// 先に inactiveSets を無効にしてから activeSets を有効にする（トークン競合防止）
+// 例: await storage.switchThemePersistent(['Shared', 'Dark'], ['Light'])
+storage.switchThemePersistent = async (activeSets, inactiveSets) => {
+  const results = [];
+  for (const name of inactiveSets) {
+    results.push(await storage.toggleSetPersistent(name, false));
+  }
+  for (const name of activeSets) {
+    results.push(await storage.toggleSetPersistent(name, true));
+  }
+  return results;
+};
+
 storage.__initDone = true;
 }
 
-// 常にサマリを返す（初回でも再呼び出しでも同じ出力）
-return [
-  'penpot-init 完了。以下の storage ラッパーを対応する penpot ネイティブメソッドの代わりに使用すること:',
-  '',
-  '| storage ラッパー | 代替対象 | 理由 |',
-  '|---|---|---|',
-  '| storage.createText(chars, {fontSize?, fontWeight?, growType?}) | penpot.createText() | fontFamily:sourcesanspro 自動設定（未設定→0x0テキスト） |',
-  '| storage.createAndOpenPage(name) | penpot.createPage()+openPage() | 切替検証・Page 1 再利用 |',
-  '| storage.connectLibrary(id) | penpot.library.connectLibrary() | 返り値キャッシュ問題回避 |',
-  '| storage.assertCurrentPage(pageOrId) | （対応なし） | ページ検証ガード |',
-  '| storage.getFileComments() | （対応なし） | ページ横断コメント取得 |',
-  '| storage.spacing | （定数） | {xs:4,sm:8,md:12,base:16,lg:24,xl:32,2xl:48,3xl:64} |',
-].join('\n');
+// ── ファイルレベルのプロジェクト状態（activate 毎に最新値）──
+const pages = penpotUtils.getPages();
+const tokenSets = penpot.library.local.tokens?.sets ?? [];
+const components = penpot.library.local.components ?? [];
+const connectedLibs = penpot.library.connected ?? [];
+
+return {
+  message: 'penpot-init 完了。'
+    + 'context: ファイルレベルの現在状態。'
+    + 'metrics: フェーズ判定用数値（SKILL.md 参照）。'
+    + 'ページ選択後は storage.getPageContext() でボード一覧取得。',
+  caution: 'storage ラッパーを対応する penpot ネイティブメソッドの代わりに使用すること。直接使用はバグ回避策を無効化する。',
+  wrappers: [
+    { fn: 'storage.createText(chars, opts)', replaces: 'penpot.createText()', reason: 'fontFamily 自動設定（未設定→0x0テキスト）' },
+    { fn: 'storage.createAndOpenPage(name)', replaces: 'penpot.createPage()+openPage()', reason: '切替検証・Page 1 再利用' },
+    { fn: 'storage.connectLibrary(id)', replaces: 'penpot.library.connectLibrary()', reason: '返り値キャッシュ問題回避' },
+    { fn: 'storage.assertCurrentPage(pageOrId)', replaces: null, reason: 'ページ検証ガード' },
+    { fn: 'storage.getFileComments()', replaces: null, reason: 'ページ横断コメント取得' },
+    { fn: 'storage.toggleSetPersistent(name, bool)', replaces: 'set.active = bool', reason: 'set.active は永続化されない（UI 自動化で回避）' },
+    { fn: 'storage.switchThemePersistent(active[], inactive[])', replaces: null, reason: '複数セットの永続的テーマ切替' },
+    { fn: 'storage.getPageContext()', replaces: null, reason: 'ページ選択後のボード一覧取得' },
+    { fn: 'storage.spacing', replaces: null, reason: '{xs:4,sm:8,md:12,base:16,lg:24,xl:32,2xl:48,3xl:64}' },
+  ],
+  context: {
+    currentPage: { id: penpot.currentPage.id, name: penpot.currentPage.name },
+    pages: pages.map(p => ({ id: p.id, name: p.name })),
+    tokenSets: tokenSets.map(s => s.name),
+    componentCount: components.length,
+    connectedLibs: connectedLibs.map(l => ({ id: l.id, name: l.name ?? l.id })),
+  },
+  metrics: {
+    tokenSets: tokenSets.length,
+    components: components.length,
+    connectedLibs: connectedLibs.length,
+    pages: pages.length,
+  },
+};

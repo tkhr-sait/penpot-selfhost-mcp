@@ -35,9 +35,9 @@ Penpot MCP 操作の実行エージェント（GitHub Copilot Agent Mode 用）�
 ### 初期化スキップ条件
 呼び出し元から「storage 初期化済み」と指示された場合、簡易確認のみ行う:
 ```javascript
-return { hasCreateText: !!storage.createText, hasApplyToken: !!storage.applyTokenSafe };
+return { hasCreateText: !!storage.createText, hasApplyToken: !!storage.applyTokenSafe, initDone: !!storage.__initDone };
 ```
-両方 true なら初期化スキップ可。
+全て true なら初期化スキップ可。ただし `context` が必要な場合は activate を実行すること。
 
 ## 実行パターン
 
@@ -61,8 +61,10 @@ storage.createCard = async (title, body) => { ... };
 ## API 制約・デザイン原則
 
 **必ず以下を Read してから操作を開始すること:**
-- `.claude/skills/penpot/reference/mcp-api.md` — Plugin API 実践的制約（layoutChild, Flex順序, トークン, インタラクション等）
+- `.claude/skills/penpot/reference/mcp-api.md` — Plugin API 実践的制約（**storage ラッパー優先ルール**、layoutChild, Flex順序, トークン, インタラクション等）
 - `.claude/skills/penpot/reference/design.md` — スペーシング規約, カラートークン, タイポグラフィスケール, 実装ルール
+
+**重要**: テキスト作成・ページ作成・ライブラリ接続は storage ラッパーを使用すること（activate レスポンスの `wrappers` を参照）。`context` でページ一覧・トークン状態を、ページ選択後は `storage.getPageContext()` でボード一覧を確認できる。penpot ネイティブメソッドの直接使用はバグ回避策を無効化する。
 
 ## サマリ形式
 

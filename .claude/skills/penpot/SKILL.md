@@ -64,8 +64,8 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 2. `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh up` で Docker 起動
 3. `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh mcp-connect` で MCP 接続開始
 4. ログで接続完了を待つ:
-   `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh logs penpot-mcp-connect-claude 2>&1 | grep -m1 "MCP connected"`
-   （mcp-connect.mjs が "MCP connected. Browser will stay open." を出力したら完了）
+   `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh wait-mcp claude`
+   （OK が返れば完了。TIMEOUT ならログを確認）
 5. `mcp__penpot-official__activate` でセッション開始（penpot-init.js 自動実行 + 動作確認）
 6. エラー時は `activate` を再度呼び出す
 
@@ -81,13 +81,15 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 **前提**: MCP接続済み | **参照**: → [design.md](reference/design.md)
 
 8フェーズで段階的に構築（01 監査 → 02 ラフスケッチ → 03 トークン定義 → 04 コンポーネント → 05 ライブラリ → 06 プロトタイプ → 07 ハンドオフ → 08 運用）。
-全フェーズ共通で `mcp__penpot-official__activate` でセッション開始する（penpot-init.js 自動実行）。
+全フェーズ共通で `mcp__penpot-official__activate` でセッション開始。
+返却値の `context` でページ一覧・トークン・コンポーネント状態を確認。
+ページ選択後は `storage.getPageContext()` でボード一覧を取得。
 
-**フェーズ判定**（キーワードが曖昧な場合）: `mcp__penpot-official__execute_code` で状態確認
-- `(penpot.library.local.tokens?.sets?.length ?? 0)` = 0 → Phase 01 or 03 から
-- トークンあり + `penpot.library.local.components.length` = 0 → Phase 04 から
-- コンポーネントあり + `penpot.library.connected.length` = 0 → Phase 05 から
-- 全あり → Phase 07 or 08
+**フェーズ判定**（キーワードが曖昧な場合）: `activate` 返却の `metrics` で状態確認
+- `metrics.tokenSets` = 0 → Phase 01 or 03 から
+- `metrics.tokenSets` > 0 + `metrics.components` = 0 → Phase 04 から
+- `metrics.components` > 0 + `metrics.connectedLibs` = 0 → Phase 05 から
+- 全 > 0 → Phase 07 or 08
 
 **フェーズ誘導**（該当フェーズの workflow/ ファイルを Read）:
 - 「ゼロから」→ [phase-01-audit.md](reference/workflow/phase-01-audit.md) から順に
@@ -119,24 +121,21 @@ Phase 1-2（理解・設計）はスキル内、Phase 3（実装）は penpot-mc
 
 ## アプリケーション作成
 
-**前提**: MCP接続済み
+**前提**: MCP接続済み | **参照**: → [pipeline/overview.md](reference/pipeline/overview.md), [mcp-api.md](reference/mcp-api.md)
 
 Penpot のデザインをもとにアプリケーションコードを生成する、または既存アプリを Penpot のデザインシステム管理下に置くためのフロー。
 **Penpot にトークンが定義されている場合はパイプライン経由で CSS 変数として利用すること。**
 
 ### フロー判定
 
-1. **デザイン確認**: `penpotUtils.shapeStructure(penpot.root, 1)` でボードの有無を確認
-   - なし → [デザイン作成](#デザイン作成) を先に実行
-2. **トークン確認**: `penpotUtils.tokenOverview()` でトークンの有無を確認
-   - あり → Step 3 へ
-   - なし → 直接値で実装可。DS管理を始めるなら [デザインシステム構築](#デザインシステム構築) Phase 03 でトークン定義
-3. **パイプライン実行**:
-   - `storage.exportTokensDTCG()` → Write ツールで `tokens/` に DTCG JSON 保存
-   - SD 設定作成（[pipeline/02-style-dictionary.md](reference/pipeline/02-style-dictionary.md) のテンプレート参照）
-   - `npm run tokens:build` で CSS 変数生成
-4. **コード実装**: 生成された CSS 変数（`--ds-*`）を使用してアプリを構築。
-   デザイン情報は `penpot.generateStyle()`, `penpot.generateMarkup()`, `export_shape` で抽出
+1. **デザイン確認**: `activate` の `metrics` + `storage.getPageContext()` でボードの有無を確認
+   - `getPageContext().boards.length` = 0 → [デザイン作成](#デザイン作成) を先に実行
+2. **トークン確認**: `metrics.tokenSets` を確認
+   - > 0 → Step 3 へ
+   - = 0 → 直接値で実装可。DS管理を始めるなら [デザインシステム構築](#デザインシステム構築) Phase 03 でトークン定義
+3. **パイプライン実行**: [外部パイプライン](#外部パイプライン)(01-02) の手順に従いトークンを CSS 変数に変換
+4. **コード実装**: 生成された CSS 変数を使用してアプリを構築。
+   デザイン抽出方法は [mcp-api.md](reference/mcp-api.md) を参照
 
 ### 既存アプリへの適用
 
@@ -166,8 +165,7 @@ Penpot のデザインをもとにアプリケーションコードを生成す�
 
 **前提**: MCP接続済み | **参照**: → [comments.md](reference/comments.md)
 
-1. `await storage.getFileComments()` で未解決コメントを取得
-2. 該当ページに移動 → 内容確認 → 修正・返信（`thread.reply()`）・解決（`thread.resolved = true`）
+[comments.md](reference/comments.md) の手順に従い、未解決コメントの確認・返信・解決を行う。
 
 ---
 

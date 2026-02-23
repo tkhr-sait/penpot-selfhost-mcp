@@ -467,6 +467,23 @@ cmd_update() {
   echo "Update completed."
 }
 
+cmd_wait_mcp() {
+  local target="${1:-claude}"
+  local timeout="${2:-60}"
+  local service="penpot-mcp-connect-${target}"
+  local elapsed=0
+  while [ "$elapsed" -lt "$timeout" ]; do
+    if dc logs "$service" 2>&1 | grep -q "MCP connected"; then
+      echo "OK"
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  echo "TIMEOUT"
+  return 1
+}
+
 cmd_mcp_connect() {
   local target="${1:-all}"
 
@@ -545,6 +562,7 @@ Commands:
   setup [email] [pw] [name]  Quick setup with default profile (dev@example.com / devdev123)
   create-profile [e] [n] [p] Create a user profile (interactive if no args)
   mcp-connect [claude|copilot|all]  Auto-connect MCP plugin via headless Playwright
+  wait-mcp [target] [timeout]  Wait for MCP connection (default: claude, 60s)
   urls                  Show service URLs
   backup [dir]          Backup database and assets
   restore <db> [assets] Restore from backup files
@@ -567,6 +585,7 @@ case "${1:-help}" in
   setup)          shift; cmd_setup "$@" ;;
   create-profile) shift; cmd_create_profile "$@" ;;
   mcp-connect)    shift; cmd_mcp_connect "$@" ;;
+  wait-mcp)       shift; cmd_wait_mcp "$@" ;;
   urls)           cmd_urls ;;
   backup)         shift; cmd_backup "$@" ;;
   restore)        shift; cmd_restore "$@" ;;

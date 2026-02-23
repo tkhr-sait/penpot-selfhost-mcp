@@ -4,40 +4,23 @@
 
 ## Docker 連動
 
-### コンテナ構成
+| ポート | 用途 |
+|--------|------|
+| 6006 (Docker) | `storybook-static/` の静的配信 |
+| 6007 (ホスト) | dev サーバー (HMR) |
 
-`penpotapp/storybook` イメージは Nginx で `/var/www` を静的配信する。
-`storybook-static/` を `/var/www:ro` にボリュームマウントして利用する。
+Storybook コンテナは `profiles: [storybook]` で分離。`storybook-static/` が存在する場合のみ `penpot-manage.sh up` で自動起動。
 
-| サービス | ポート | 用途 |
-|----------|--------|------|
-| penpot-storybook | 6006 (Docker) | 静的ビルドの配信 |
-| dev サーバー | 6007 (ホスト) | 開発時の HMR サーバー |
-
-> 6006 は Docker コンテナが使用するため、dev サーバーは 6007 に変更する。
-
-### profile 制御
-
-Storybook コンテナは `profiles: [storybook]` で分離されている。
-`storybook-static/` ディレクトリが存在する場合のみ `penpot-manage.sh up` が `--profile storybook` を付与して起動する。
-
-```bash
-# storybook-static/ がない場合 → Storybook コンテナはスキップ
-bash penpot-manage.sh up
-# → "Info: storybook-static/ が見つかりません。Storybook コンテナはスキップ。"
-
-# ビルド後に再起動 → Storybook コンテナが起動
-npm run storybook:build
-bash penpot-manage.sh up
-# → "Storybook: 配信します"
-```
-
-### 環境変数
-
-`PENPOT_STORYBOOK_DIR` でマウント元ディレクトリを制御可能（`.env` で設定）:
+環境変数（`.env` で設定可能）:
 ```
 PENPOT_STORYBOOK_DIR=../../../../../storybook-static
 PENPOT_STORYBOOK_PORT=6006
+```
+
+```bash
+# ビルド → 再起動で Docker コンテナに反映
+npm run storybook:build
+bash penpot-manage.sh up
 ```
 
 ## 初期化
@@ -45,7 +28,7 @@ PENPOT_STORYBOOK_PORT=6006
 ### 前提
 
 `@storybook/react-vite` は `@vitejs/plugin-react` を**自動注入しない**。
-プロジェクトに `vite.config.js` + `react()` プラグインがなければ JSX 自動ランタイムが無効になり「React is not defined」エラーが発生する。
+プロジェクトに `vite.config.js` + `react()` プラグインがなければ「React is not defined」エラーが発生する。
 
 ### 手順
 
@@ -76,7 +59,7 @@ export default {
 - ESM: `package.json` に `"type": "module"` がないと警告が出る
 - JSX ファイルに `import React from 'react'` は不要（`react()` プラグインが自動ランタイムを有効化）
 
-## .storybook/ 設定ファイル
+## .storybook/ 設定
 
 ### main.js
 
@@ -104,8 +87,8 @@ const config = {
 };
 ```
 
-- `@storybook/addon-mcp` — Storybook MCP サーバー統合アドオン（Claude Code / Copilot の Storybook MCP と連携）
-- `experimentalComponentsManifest: true` — コンポーネントマニフェスト生成の実験的機能を有効化
+- `@storybook/addon-mcp` — Storybook MCP サーバー統合アドオン（Claude Code / Copilot と連携）
+- `experimentalComponentsManifest: true` — コンポーネントマニフェスト生成を有効化
 
 ### preview.js
 
@@ -114,16 +97,10 @@ import '../build/css/variables.css';
 
 export default {
   parameters: {
-    a11y: { test: "todo" },
+    a11y: { test: "todo" },  // "error" で CI 失敗, "off" でスキップ
   },
 };
 ```
-
-| `a11y.test` 値 | 動作 |
-|-----------------|------|
-| `"todo"` | a11y 違反をテスト UI に表示（CI は失敗しない） |
-| `"error"` | a11y 違反で CI 失敗 |
-| `"off"` | a11y チェックを完全スキップ |
 
 ### vitest.setup.js
 
@@ -135,27 +112,10 @@ import * as projectAnnotations from './preview';
 setProjectAnnotations([a11yAddonAnnotations, projectAnnotations]);
 ```
 
-`setProjectAnnotations` により、a11y アドオンのアノテーションと preview.js のパラメータが vitest 実行時にも適用される。
-
 ## CSS トークン使用ルール
 
-### 原則
-
 コンポーネント CSS では `--ds-*` 変数を使用し、ハードコード値を避ける。
-
-### プロパティ対応表
-
-| CSS プロパティ | トークン変数 |
-|---------------|-------------|
-| color, background-color | `--ds-color-*` |
-| font-size | `--ds-font-size-*` |
-| font-family | `--ds-font-family-*` |
-| font-weight | `--ds-font-weight-*` |
-| line-height | `--ds-line-height-*` |
-| padding, margin, gap, top, right, bottom, left | `--ds-spacing-*` |
-| border-radius | `--ds-border-radius-*` |
-| border-width | `--ds-border-width-*` |
-| width, height | `--ds-sizing-*` |
+命名規則: `--ds-{トークンタイプ}-{名前}`（例: `--ds-color-primary`, `--ds-spacing-md`）。
 
 ### 例外（ハードコード許容）
 
@@ -180,19 +140,8 @@ Board (最上位 — fills/strokes は空)
       └── Text (ラベル)
 ```
 
-- 最上位 Board の `fills`/`strokes` は空 → スタイルは子要素（Group 内の Rectangle/Text）に設定
-- CSS 生成は最下層まで再帰的に取得する必要がある（`penpot.generateStyle` に `withChildren: true` を指定）
-
-### コンポーネント一覧取得
-
-```javascript
-// MCP で Penpot コンポーネント一覧を取得
-const components = penpot.library.local.components;
-return components.map(c => ({
-  name: c.name,
-  path: c.path
-}));
-```
+- 最上位 Board の `fills`/`strokes` は空 → スタイルは子要素に設定
+- CSS 生成は最下層まで再帰的に取得（`penpot.generateStyle` に `withChildren: true`）
 
 ## stories/ 構成
 
@@ -203,18 +152,10 @@ stories/
 ├── Button.jsx
 ├── Button.css
 ├── Button.stories.js
-├── Input.jsx
-├── Input.css
-├── Input.stories.js
-├── Checkbox.jsx
-├── Checkbox.css
-├── Checkbox.stories.js
 └── ...
 ```
 
-### CSS 変数の使用パターン
-
-コンポーネントの `.css` ファイルで `--ds-*` CSS 変数を使用:
+コンポーネントの `.css` で `--ds-*` CSS 変数を使用:
 
 ```css
 .button {
@@ -227,27 +168,7 @@ stories/
 }
 ```
 
-CSS 変数は `.storybook/preview.js` で `build/css/variables.css` をインポートして読み込む:
-
-```javascript
-// .storybook/preview.js
-import '../build/css/variables.css';
-
-export default {
-  // ...
-};
-```
-
 ## npm スクリプト
-
-| スクリプト | コマンド | 説明 |
-|-----------|---------|------|
-| `storybook` | `storybook dev -p 6007` | dev サーバー (HMR) |
-| `storybook:build` | `storybook build` | 静的ビルド → `storybook-static/` |
-| `tokens:audit` | `! grep ... \| grep -v 'ds-ignore' \| grep .` | CSS ハードコード値検出（失敗で exit 1） |
-| `storybook:deploy` | `npm run tokens:build && npm run tokens:audit && npm run storybook:build` | 一括: トークンビルド → 監査 → Storybook ビルド |
-| `vrt` | `lost-pixel` | VRT: ベースラインと比較（差分あれば exit 1）→ [04-vrt.md](04-vrt.md) |
-| `vrt:update` | `lost-pixel update` | VRT: ベースライン更新 → [04-vrt.md](04-vrt.md) |
 
 ```json
 {
@@ -262,7 +183,7 @@ export default {
 }
 ```
 
-`storybook:deploy` 後に `penpot-manage.sh up` で Docker コンテナに反映。
+`storybook:deploy` 後に `penpot-manage.sh up` で Docker コンテナに反映。VRT の詳細は [04-vrt.md](04-vrt.md) を参照。
 
 ## 日常ワークフロー: コンポーネント追加
 
