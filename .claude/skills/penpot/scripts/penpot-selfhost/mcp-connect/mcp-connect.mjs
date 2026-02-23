@@ -66,7 +66,7 @@ const PLUGIN_ACTION_TIMEOUT = 15_000;
 const LOGIN_RETRY_INTERVAL = 5000;
 const LOGIN_RETRY_TIMEOUT = 300_000;
 const MONITOR_INTERVAL = 5000;       // Plugin connection check interval
-const RECONNECT_COOLDOWN = 15000;    // Cooldown after reconnect
+const RECONNECT_COOLDOWN = 30000;    // Cooldown after reconnect
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -316,11 +316,13 @@ async function ensureWorkspaceFile(context) {
 async function openWorkspace(page) {
   const { projectId, fileId } = await ensureWorkspaceFile(page.context());
 
+  const wsUrl = `${PENPOT_URI}/#/workspace/${projectId}/${fileId}`;
   log(`Navigating to workspace: project=${projectId}, file=${fileId} ...`);
-  await page.goto(`${PENPOT_URI}/#/workspace/${projectId}/${fileId}`, {
+  await page.goto(wsUrl, {
     waitUntil: "domcontentloaded",
     timeout: NAV_TIMEOUT,
   });
+  currentWorkspaceUrl = wsUrl;
 
   // Ensure we're in the workspace editor
   await page.waitForSelector('[class*="viewport"]', {
@@ -509,6 +511,7 @@ async function verifyConnection(page) {
 // ---------------------------------------------------------------------------
 let navigationStatus = "ready";
 let lastReconnectTime = 0;
+let currentWorkspaceUrl = null;
 
 /**
  * Check if the MCP plugin is connected by inspecting the iframe status element.
@@ -573,10 +576,23 @@ async function reconnectPlugin(page) {
     managerOpened = await pluginManagerModal.waitFor({ state: "visible", timeout: 5000 })
       .then(() => true).catch(() => false);
 
-    // Strategy 2: Reload page to get clean state (reliable fallback)
+    // Strategy 2: Navigate via about:blank to explicitly close old WebSocket,
+    // then re-navigate to workspace (prevents ghost session accumulation)
     if (!managerOpened) {
-      log("[nav] Shortcut failed, reloading page ...");
-      await page.reload({ waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT });
+      log("[nav] Shortcut failed, navigating via about:blank to close old WebSocket ...");
+      await page.goto("about:blank");
+      await sleep(2000); // Allow Penpot backend to process disconnect
+
+      if (currentWorkspaceUrl) {
+        log("[nav] Re-navigating to workspace ...");
+        await page.goto(currentWorkspaceUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: NAV_TIMEOUT,
+        });
+      } else {
+        log("[nav] No workspace URL recorded, reloading ...");
+        await page.goBack({ waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT });
+      }
       await page.waitForSelector('[class*="viewport"]', {
         state: "visible",
         timeout: NAV_TIMEOUT,
@@ -719,8 +735,13 @@ function startBridgeServer(page) {
 
           // Background: navigate + reconnect
           try {
+            const navUrl = `${PENPOT_URI}/#/workspace/${projectId}/${fileId}`;
             log(`[nav] Navigating to project=${projectId}, file=${fileId} ...`);
-            await page.goto(`${PENPOT_URI}/#/workspace/${projectId}/${fileId}`, {
+            // Navigate via about:blank to explicitly close old WebSocket session
+            await page.goto("about:blank");
+            await sleep(2000);
+            currentWorkspaceUrl = navUrl;
+            await page.goto(navUrl, {
               waitUntil: "domcontentloaded",
               timeout: NAV_TIMEOUT,
             });
@@ -772,6 +793,15 @@ async function keepAlive(browser, page) {
     // Handle Ctrl+C / SIGTERM gracefully (normal shutdown)
     const shutdown = async () => {
       log("Shutting down ...");
+      // Navigate to about:blank to explicitly close WebSocket before browser close
+      // This sends a clean FIN to Penpot backend, preventing ghost sessions
+      try {
+        const pages = browser.contexts()?.[0]?.pages() || [];
+        for (const p of pages) {
+          await p.goto("about:blank", { timeout: 5000 }).catch(() => {});
+        }
+        await sleep(1000);
+      } catch {}
       await browser.close().catch(() => {});
       resolve();
     };

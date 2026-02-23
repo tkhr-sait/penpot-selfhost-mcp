@@ -26,4 +26,4 @@ ENV MCP_SERVICE_NAME=penpot-mcp-claude
 #   4402 → ${MCP_SERVICE_NAME}:4402  (WebSocket)
 # Required because plugin iframe/JS uses localhost URLs inside the browser
 # mcp-connect.mjs: runs in foreground
-CMD ["sh", "-c", "socat TCP-LISTEN:9001,fork,reuseaddr TCP:penpot-frontend:8080 & socat TCP-LISTEN:4400,fork,reuseaddr TCP:${MCP_SERVICE_NAME}:4400 & socat TCP-LISTEN:4402,fork,reuseaddr TCP:${MCP_SERVICE_NAME}:4402 & exec node mcp-connect.mjs"]
+CMD ["sh", "-c", "socat TCP-LISTEN:9001,fork,reuseaddr TCP:penpot-frontend:8080,keepalive,keepidle=10,keepintvl=5,keepcnt=3 & socat TCP-LISTEN:4400,fork,reuseaddr TCP:${MCP_SERVICE_NAME}:4400 & socat TCP-LISTEN:4402,fork,reuseaddr TCP:${MCP_SERVICE_NAME}:4402,keepalive,keepidle=10,keepintvl=5,keepcnt=3 & exec node mcp-connect.mjs"]

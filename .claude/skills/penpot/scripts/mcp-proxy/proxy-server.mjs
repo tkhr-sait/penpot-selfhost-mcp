@@ -332,8 +332,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     return await upstream.callTool({ name, arguments: args });
   } catch (e) {
     // Upstream disconnected (keep unlocked, don't re-lock)
+    const stale = upstream;
     upstream = null;
     initDone = false;
+    if (stale) { try { await stale.close(); } catch {} }
 
     // Transparent mode: try auto-reconnect once
     if (!GATE_ENABLED) {
