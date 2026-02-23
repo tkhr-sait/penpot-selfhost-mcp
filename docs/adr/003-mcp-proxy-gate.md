@@ -27,6 +27,10 @@ stdio プロキシ MCP サーバーを挟み、以下の制御を行う。
 
 `activate` 時に `--init-script` で指定された初期化スクリプトを上流で自動実行する。スクリプトは `--init-tool`（デフォルト: `execute_code`）を使って上流に送信される。スキル側のルーティングマップから手動実行手順を削除。
 
+- autoInit は実行結果を返却し、`formatInitResult` ヘルパーで activate レスポンスに含める
+- init スクリプト未発見時はエラーオブジェクトを返却（サイレント失敗の排除）
+- init 失敗時は `initDone` フラグを立てず、次回 activate で再試行
+
 ### 3. 再接続管理
 
 上流切断時、AI が `activate` を再呼び出しすることで再接続する。ユーザーの手動操作（`/mcp` → Reconnect）が不要になる。transparent モードでは初回ツール呼び出し時に自動接続し、切断時は自動再接続を 1 回試行する。
@@ -46,6 +50,13 @@ stdio プロキシ MCP サーバーを挟み、以下の制御を行う。
 ### 7. `sendToolListChanged` による動的スキーマ更新
 
 `activate` 成功後に `sendToolListChanged` を送信し、Claude Code にリアルスキーマを通知する。Eager Schema Fetch が成功していなかった場合でも、activate 後にフォールバック定義からリアルスキーマへの切り替えが行われる。
+
+### 8. init 結果伝搬と storage ラッパー優先
+
+- init スクリプトが storage ラッパー対応表を `return` → proxy が `formatInitResult` で activate レスポンスに含める
+- AI は activate レスポンスで storage ラッパーの存在・用途を把握し、ネイティブメソッドを迂回する情報を確実に受け取る
+- "Already activated" 時も init を再実行（冪等）し同じ対応表を返却。コンテキスト圧縮後の情報復元を保証
+- 冪等性はプラグイン環境側（`storage.__initDone`）で管理し、proxy は init 完了状態を持たない（`initDone` はリトライ制御のみ）
 
 ## Architecture
 
@@ -137,12 +148,14 @@ AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → storybook-mcp (localhos
 
 ```
 起動 → [locked, disconnected]
+         ↓ activate 以外のツール呼び出し
+       エラー: "MCP セッションが未開始です。先に activate ツールを呼び出して…"
          ↓ activate 呼び出し
        [unlocked, connected]  ← 正常状態
          ↓ 上流切断検知
        [unlocked, disconnected]
          ↓ ツール呼び出し
-       エラー: "上流MCP切断。activate を再度呼んでください"
+       エラー: "上流 MCP が切断されました。activate を呼び出して再接続してください"
          ↓ activate 再呼び出し
        [unlocked, connected]  ← 復旧
 ```
@@ -163,8 +176,8 @@ AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → storybook-mcp (localhos
 
 1. **全ツールを一貫したゲート方式で公開** — 特定ツールだけでなく全ツールを activate ゲート配下に置く。ゲートはセキュリティ機構ではなく、スキルロードの確認
 2. **システムプロンプトから詳細 API ドキュメントを除外** — high_level_overview はゲート付きツールとして提供。スキル未ロード時に AI が詳細 API 知識を持たない設計
-3. **penpot-init.js の auto-init** — activate で自動実行し、手動の初期化忘れを排除。init スクリプトは volume mount による外部注入で、イメージ再ビルド不要
-4. **activate が冪等** — 初回ゲート解除、再接続、再初期化のすべてを 1 つのツールで制御。再呼び出し時は `sendToolListChanged` を送信
+3. **penpot-init.js の auto-init** — activate で自動実行し、手動の初期化忘れを排除。init スクリプトは volume mount による外部注入で、イメージ再ビルド不要。init スクリプトは冪等ガード付き（`storage.__initDone`）で、初回は全 storage メソッドを登録、再実行時はスキップ。常に storage ラッパー対応表を `return` し、proxy が activate レスポンスに透過転送
+4. **activate が冪等** — 初回ゲート解除、再接続、再初期化のすべてを 1 つのツールで制御。再呼び出し時は `sendToolListChanged` を送信。"Already activated" 時も init を force 再実行し、storage ラッパー対応表を返す。コンテキスト圧縮後の情報復元を保証
 5. **Docker コンテナ化 + infra 非依存** — penpot-selfhost の docker-compose.yml には依存せず、独立した compose ファイルで起動。`docker compose run` による自動ビルド + stdio 接続
 6. **CLI 引数 + 環境変数の二段フォールバック** — CLI > env > default の優先順位。`--upstream` はデフォルトなしの必須引数とし、誤接続を防止。Penpot 固有のデフォルト値をプロキシ本体から排除
 7. **Docker Compose service preset による設定集約** — Penpot 固有設定（サーバー名、スキル名、ツールリスト、init スクリプト）を docker-compose.yml の named service（`penpot-proxy`, `storybook-proxy`）に集約し、呼び出し元 `.mcp.json` は upstream URL のみ指定
@@ -179,6 +192,9 @@ AI → (stdio) → [Docker] Proxy MCP → (HTTP/SSE) → storybook-mcp (localhos
 - プロキシ本体は完全に汎用。新しい MCP サーバー追加は compose preset + upstream URL のみ
 - `.mcp.json` の差分は upstream URL のみで、設定の見通しが向上
 - init スクリプトの変更はイメージ再ビルド不要（volume mount）
+- activate レスポンスに storage ラッパー対応表が含まれ、AI がネイティブメソッドを迂回する情報を確実に受け取る
+- "Already activated" でも同じ対応表が返り、コンテキスト圧縮後の情報復元が可能
+- init 失敗がサイレントでなくなり、問題の早期発見が可能
 
 ### Negative
 

@@ -9,6 +9,7 @@ tools:
   - mcp__penpot-official__execute_code
   - mcp__penpot-official__export_shape
   - mcp__penpot-official__penpot_api_info
+  - mcp__penpot-official__high_level_overview
   - Read
   - Grep
   - Glob
@@ -67,8 +68,10 @@ storage.createCard = async (title, body) => { ... };
 ## API 制約・デザイン原則
 
 **必ず以下を Read してから操作を開始すること:**
-- `.claude/skills/penpot/reference/mcp-api.md` — Plugin API 実践的制約（layoutChild, Flex順序, トークン, インタラクション等）
+- `.claude/skills/penpot/reference/mcp-api.md` — Plugin API 実践的制約（**storage ラッパー優先ルール**、layoutChild, Flex順序, トークン, インタラクション等）
 - `.claude/skills/penpot/reference/design.md` — スペーシング規約, カラートークン, タイポグラフィスケール, 実装ルール
+
+**重要**: テキスト作成・ページ作成・ライブラリ接続は storage ラッパーを使用すること（activate レスポンスの対応表を参照）。penpot ネイティブメソッドの直接使用はバグ回避策を無効化する。
 
 ## サマリ形式
 

@@ -39,6 +39,18 @@ penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_ov
 
 ## Plugin API 実践的制約
 
+### storage ラッパー優先ルール
+
+penpot-init.js で初期化される storage ラッパーは、対応する penpot ネイティブメソッドの **代わりに** 使用すること。ネイティブメソッドを直接使うとバグや環境制約の回避策が無効化される。
+
+| 必ず使う | 使わない | 理由 |
+|---------|---------|------|
+| `storage.createText()` | `penpot.createText()` | fontFamily 未設定→0x0テキスト（エアギャップ環境） |
+| `storage.createAndOpenPage()` | `penpot.createPage()`+`openPage()` | 切替検証・Page 1 再利用 |
+| `storage.connectLibrary()` | `penpot.library.connectLibrary()` | 返り値 name:null, components:[] 問題 |
+
+> activate レスポンスにも同じ対応表が含まれる。
+
 ### execute_code
 
 - **戻り値は `return` で返す**: 末尾の式評価では出力されない（`result` が空文字になる）

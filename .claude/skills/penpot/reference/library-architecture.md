@@ -86,7 +86,7 @@ comp.name = 'Button / Primary / Large';
 
 ```javascript
 const available = await penpot.library.availableLibraries();
-const lib = await penpot.library.connectLibrary(libraryId);
+const lib = await storage.connectLibrary(libraryId);
 const components = lib.components;  // 外部ライブラリのコンポーネント取得
 ```
 

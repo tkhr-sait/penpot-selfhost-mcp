@@ -80,18 +80,25 @@ async function connectUpstream() {
   return client;
 }
 
-// --- Auto-init (re-run on reconnect) ---
+// --- Auto-init (re-run on reconnect, returns result for activate response) ---
 async function autoInit(force = false) {
   if (!INIT_SCRIPT) {
     initDone = true;
-    return;
+    return null;
   }
-  if (initDone && !force) return;
+  if (initDone && !force) return null;
   if (!existsSync(INIT_SCRIPT)) {
     console.error(`[mcp-proxy] Init script not found: ${INIT_SCRIPT}`);
     console.error("[mcp-proxy] Check volume mount or --init-script path.");
-    initDone = true;
-    return;
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: `初期化スクリプトが見つかりません: ${INIT_SCRIPT}`,
+        },
+      ],
+    };
   }
   const code = readFileSync(INIT_SCRIPT, "utf-8");
   const result = await upstream.callTool({
@@ -99,6 +106,16 @@ async function autoInit(force = false) {
     arguments: { code },
   });
   if (!result.isError) initDone = true;
+  return result;
+}
+
+// --- Format init result for activate response ---
+function formatInitResult(initResult) {
+  if (!initResult) return "";
+  const initText = initResult.content?.find((c) => c.type === "text")?.text;
+  if (initResult.isError)
+    return `\n\n⚠ 初期化エラー:\n${initText || "不明"}`;
+  return initText ? `\n\n${initText}` : "";
 }
 
 // --- Create server ---
@@ -148,7 +165,7 @@ const ACTIVATE_TOOL = {
 };
 
 const WORKFLOW_SUFFIX = GATE_ENABLED
-  ? "\n[WORKFLOW] activate が未呼び出しの場合はエラー。"
+  ? "\n[WORKFLOW] 使用前に activate ツールの呼び出しが必要。"
   : "";
 
 // Build fallback tool definitions (before activate, gate mode only)
@@ -209,22 +226,36 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   // --- activate (idempotent, gate mode only) ---
   if (name === "activate") {
     if (unlocked && upstream !== null) {
-      // Notify Claude Code to re-fetch tool schemas (may be stale from fallback)
       await server.sendToolListChanged();
+      // Re-run init (idempotent in plugin env) to return summary for context recovery
+      const initResult = await autoInit(true);
       return {
-        content: [{ type: "text", text: "Already activated." }],
+        content: [
+          {
+            type: "text",
+            text: `Already activated.${formatInitResult(initResult)}`,
+          },
+        ],
       };
     }
     try {
-      upstream = await connectUpstream();
-      await cacheUpstreamTools();
-      await autoInit(!initDone ? false : true);
+      // Reuse existing upstream connection from ensureSchemaCache if available
+      if (!upstream) {
+        upstream = await connectUpstream();
+      }
+      if (!upstreamToolsCache) {
+        await cacheUpstreamTools();
+      }
+      const initResult = await autoInit(!initDone ? false : true);
       unlocked = true;
       // Notify Claude Code that real tool schemas are now available
       await server.sendToolListChanged();
       return {
         content: [
-          { type: "text", text: `${SERVER_NAME} MCP activated. Ready.` },
+          {
+            type: "text",
+            text: `${SERVER_NAME} MCP activated. Ready.${formatInitResult(initResult)}`,
+          },
         ],
       };
     } catch (e) {
@@ -272,8 +303,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         {
           type: "text",
           text:
-            `${SERVER_NAME} スキルがロードされていません。\n` +
-            `${SKILL_NAME} スキルを実行してから再試行してください。`,
+            `${SERVER_NAME} MCP セッションが未開始です。\n` +
+            `先に activate ツールを呼び出してセッションを開始してください。` +
+            (SKILL_NAME
+              ? `\n（前提: ${SKILL_NAME} スキルのロード）`
+              : ""),
         },
       ],
       isError: true,

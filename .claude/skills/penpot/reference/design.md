@@ -89,6 +89,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ### フォント
 - **`fontFamily: "sourcesanspro"` のみ**（セルフホスト環境の唯一のビルトインフォント）
+- テキスト作成は `storage.createText()` を使用すること（fontFamily 自動設定）。`penpot.createText()` 直接使用禁止
 
 ### スペーシング
 - 4px/8px グリッドシステム（4, 8, 12, 16, 24, 32, 48, 64）

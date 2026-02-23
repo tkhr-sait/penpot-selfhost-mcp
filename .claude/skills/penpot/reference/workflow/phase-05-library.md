@@ -30,7 +30,7 @@
 
 ```javascript
 const available = await penpot.library.availableLibraries();
-const lib = await penpot.library.connectLibrary(id);
+const lib = await storage.connectLibrary(id);
 ```
 
 ### 接続ライブラリのアセット利用

@@ -1,11 +1,15 @@
 // ============================================================
-// Penpot Design Utilities
-// Read this file, then run via MCP execute_code.
+// Penpot Design Utilities — storage ラッパー
+//
+// activate 時に自動実行。冪等（再呼び出しでも安全）。
+// 対応する penpot ネイティブメソッドの **代わりに** 使用すること。
 //
 // Provides: storage.spacing, storage.createText,
 //           storage.createAndOpenPage, storage.assertCurrentPage,
 //           storage.getFileComments, storage.connectLibrary
 // ============================================================
+
+if (!storage.__initDone) {
 
 // スペーシング定数
 storage.spacing = {
@@ -14,6 +18,7 @@ storage.spacing = {
 };
 
 // テキスト作成ヘルパー（fontFamily: sourcesanspro 強制）
+// ⚠ penpot.createText() を直接使わないこと（fontFamily 未設定→0x0テキスト）
 storage.createText = (chars, { fontSize = 16, fontWeight = 'regular', growType = 'auto-width' } = {}) => {
   const text = penpot.createText(chars);
   text.fontFamily = 'sourcesanspro';
@@ -24,6 +29,7 @@ storage.createText = (chars, { fontSize = 16, fontWeight = 'regular', growType =
 };
 
 // ページ作成 + 切替ヘルパー（ページ作成後の切替忘れ防止）
+// ⚠ penpot.createPage()+openPage() を直接使わないこと
 // 空の "Page 1" が存在する場合はリネームして再利用する（Penpot はファイル作成時に
 // Page 1 を自動生成するため、新規ページ作成前に空き Page 1 を優先利用する）。
 // ファイルには最低1ページが必要なため、Page 1 の再利用はページ数の肥大化も防ぐ。
@@ -109,7 +115,7 @@ storage.getFileComments = async () => {
 };
 
 // ライブラリ接続ヘルパー（connectLibrary の返り値キャッシュ問題を回避）
-// penpot.library.connectLibrary() の返り値は name: null, components: [] になることがある。
+// ⚠ penpot.library.connectLibrary() を直接使わないこと（返り値 name:null, components:[] 問題）
 // 接続後に penpot.library.connected から取得し直すことで正しい値を返す。
 storage.connectLibrary = async (libraryId) => {
   await penpot.library.connectLibrary(libraryId);
@@ -119,3 +125,20 @@ storage.connectLibrary = async (libraryId) => {
   }
   return lib;
 };
+
+storage.__initDone = true;
+}
+
+// 常にサマリを返す（初回でも再呼び出しでも同じ出力）
+return [
+  'penpot-init 完了。以下の storage ラッパーを対応する penpot ネイティブメソッドの代わりに使用すること:',
+  '',
+  '| storage ラッパー | 代替対象 | 理由 |',
+  '|---|---|---|',
+  '| storage.createText(chars, {fontSize?, fontWeight?, growType?}) | penpot.createText() | fontFamily:sourcesanspro 自動設定（未設定→0x0テキスト） |',
+  '| storage.createAndOpenPage(name) | penpot.createPage()+openPage() | 切替検証・Page 1 再利用 |',
+  '| storage.connectLibrary(id) | penpot.library.connectLibrary() | 返り値キャッシュ問題回避 |',
+  '| storage.assertCurrentPage(pageOrId) | （対応なし） | ページ検証ガード |',
+  '| storage.getFileComments() | （対応なし） | ページ横断コメント取得 |',
+  '| storage.spacing | （定数） | {xs:4,sm:8,md:12,base:16,lg:24,xl:32,2xl:48,3xl:64} |',
+].join('\n');
