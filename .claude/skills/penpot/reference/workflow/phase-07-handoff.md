@@ -22,20 +22,12 @@ PenpotのオープンスタンダードでスムーズなDev Handoffを実現す
 
 ## MCP によるコード生成
 
-`penpot-init.js` 初期化後:
+`activate` 実行後:
 
-### CSS 生成
+### CSS / HTML / SVG 生成
 
-```javascript
-penpot.generateStyle(shapes, { type: 'css', withChildren: true });
-```
-
-### HTML/SVG マークアップ生成
-
-```javascript
-penpot.generateMarkup(shapes, { type: 'html' });
-penpot.generateMarkup(shapes, { type: 'svg' });
-```
+`penpot.generateStyle()` でCSS、`penpot.generateMarkup()` でHTML/SVGを生成。
+コード例 → [mcp-api.md #コード生成（ハンドオフ）](../mcp-api.md#コード生成ハンドオフ)
 
 ### トークン→コード変換
 `storage.findToken(name)` でトークン名から値を取得し（見つからなければ登録済みトークン名を含むエラー）、CSS カスタムプロパティや設計変数として出力。`penpotUtils.tokenOverview()` でトークン一覧を確認。

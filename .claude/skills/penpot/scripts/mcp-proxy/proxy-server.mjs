@@ -7,7 +7,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 // --- CLI argument parsing ---
 function getArg(name, def) {
@@ -29,11 +30,22 @@ const GATE_ENABLED = !!SKILL_NAME;
 
 const NO_INIT =
   hasFlag("no-init") || env("MCP_NO_INIT", "") === "true";
-const INIT_SCRIPT = NO_INIT
-  ? null
-  : getArg("init-script", "") || env("MCP_INIT_SCRIPT", "") || null;
 const INIT_TOOL =
   getArg("init-tool", "") || env("MCP_INIT_TOOL", "execute_code");
+
+// init.d ディレクトリ自動検出（後方互換: 単一ファイル/カンマ区切りも可）
+const INIT_DIR = getArg("init-dir", "") || env("MCP_INIT_DIR", "");
+const INIT_SCRIPTS = NO_INIT ? [] : (() => {
+  if (INIT_DIR && existsSync(INIT_DIR)) {
+    return readdirSync(INIT_DIR)
+      .filter(f => f.endsWith('.js'))
+      .sort()
+      .map(f => join(INIT_DIR, f));
+  }
+  // 後方互換: MCP_INIT_SCRIPT（単一 or カンマ区切り）
+  const s = getArg("init-script", "") || env("MCP_INIT_SCRIPT", "") || "";
+  return s.split(",").map(x => x.trim()).filter(Boolean);
+})();
 
 const TOOLS_ARG = getArg("tools", "") || env("MCP_TOOLS", "*");
 const TOOL_WILDCARD = TOOLS_ARG === "*";
@@ -81,32 +93,37 @@ async function connectUpstream() {
 }
 
 // --- Auto-init (re-run on reconnect, returns result for activate response) ---
+// 1ファイル1 execute_code でサイズ制限リスクを回避
 async function autoInit(force = false) {
-  if (!INIT_SCRIPT) {
+  if (INIT_SCRIPTS.length === 0) {
     initDone = true;
     return null;
   }
   if (initDone && !force) return null;
-  if (!existsSync(INIT_SCRIPT)) {
-    console.error(`[mcp-proxy] Init script not found: ${INIT_SCRIPT}`);
-    console.error("[mcp-proxy] Check volume mount or --init-script path.");
-    return {
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: `初期化スクリプトが見つかりません: ${INIT_SCRIPT}`,
-        },
-      ],
-    };
+  let lastResult = null;
+  for (const script of INIT_SCRIPTS) {
+    if (!existsSync(script)) {
+      console.error(`[mcp-proxy] Init script not found: ${script}`);
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `初期化スクリプトが見つかりません: ${script}`,
+          },
+        ],
+      };
+    }
+    const code = readFileSync(script, "utf-8");
+    const result = await upstream.callTool({
+      name: INIT_TOOL,
+      arguments: { code },
+    });
+    if (result.isError) return result;
+    lastResult = result;
   }
-  const code = readFileSync(INIT_SCRIPT, "utf-8");
-  const result = await upstream.callTool({
-    name: INIT_TOOL,
-    arguments: { code },
-  });
-  if (!result.isError) initDone = true;
-  return result;
+  initDone = true;
+  return lastResult; // 最後のスクリプト（90-core.js）の return 値
 }
 
 // --- Format init result for activate response ---
@@ -160,7 +177,7 @@ const ACTIVATE_TOOL = {
   description:
     `${SERVER_NAME} MCP セッションを開始/再接続する。` +
     (SKILL_NAME ? `\n${SKILL_NAME} スキルロード後に呼び出すこと。` : "") +
-    (NO_INIT || !INIT_SCRIPT ? "" : "\n初期化スクリプトを自動実行。"),
+    (INIT_SCRIPTS.length === 0 ? "" : `\n初期化スクリプトを自動実行（${INIT_SCRIPTS.length}ファイル）。`),
   inputSchema: { type: "object", properties: {} },
 };
 
@@ -362,6 +379,25 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     };
   }
 });
+
+// --- Graceful shutdown ---
+async function shutdown() {
+  if (upstream) {
+    try {
+      await upstream.close();
+    } catch {
+      /* ignore */
+    }
+    upstream = null;
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+// stdin 切断でプロセス終了（Claude Code が MCP 再接続すると古い stdin が閉じられる）
+process.stdin.on("end", shutdown);
 
 // --- Start ---
 const transport = new StdioServerTransport();

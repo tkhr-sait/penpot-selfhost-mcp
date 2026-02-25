@@ -34,13 +34,13 @@
 
 ## MCP による自動監査
 
-`penpot-init.js` を初期化後、`mcp__penpot-official__execute_code` で既存デザインをプログラム的に分析:
+`activate` 実行後、`mcp__penpot-official__execute_code` で既存デザインをプログラム的に分析:
 
 ### カラー使用状況の収集
 全シェイプの fills/strokes を走査し、使用色を集計。`penpotUtils.findTokenByName()` （または `storage.findTokenOrNull()` ）でネイティブデザイントークンと突合し、未登録色を検出。
 
 ### フォント・テキスト不整合の検出
-`validate-design.js` を実行し、fontFamily/サイズ/growType の違反を自動検出。
+`return storage.validateDesign()` で fontFamily/サイズ/growType の違反を自動検出。
 
 ### コンポーネント使用状況
 `penpot.library.local.components` を走査し、利用・未利用を集計。

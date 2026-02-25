@@ -28,27 +28,26 @@
 
 ### 外部ライブラリの接続
 
-```javascript
-const available = await penpot.library.availableLibraries();
-const lib = await storage.connectLibrary(id);
-```
+`penpot.library.availableLibraries()` で取得し `storage.connectLibrary(id)` で接続。
+詳細 → [mcp-api.md #storage ラッパー優先ルール](../mcp-api.md#storage-ラッパー優先ルール)
 
 ### 接続ライブラリのアセット利用
 `lib.components` から取得し、`instance()` で適用。
 
 ## REST API によるライブラリ管理
 
-`penpot-rest-api.js` を初期化すれば、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
+activate 時に自動初期化される REST API ユーティリティで、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
 
-1. **ライブラリファイル作成**: `await storage.createFile(projectId, 'UI Components Lib', { isShared: true })`
-2. **ライブラリ接続**: `await storage.linkLibrary(originalFileId, libFileId)`
+1. **ライブラリファイル作成**: `storage.createFile()` で isShared 付きファイルを作成
+2. **ライブラリ接続**: `storage.linkLibrary()` で接続
+   → コード例は [mcp-api.md #ライブラリ管理](../mcp-api.md#ライブラリ管理) を参照
 
 ### openFile 方式（コンポーネント登録等、Plugin API が必要な場合）
 
 1. **ファイル切替**: `await storage.openFile(projectId, newFileId)` — MCP 再接続が発生（10-15秒）
-2. **再接続**: `/mcp` → `penpot-official` → Reconnect → `penpot-init.js` + `penpot-rest-api.js` を再初期化
+2. **再接続**: `activate` 再呼び出しで storage ラッパー再初期化
 3. **アセット登録**: Plugin API でコンポーネント等を登録
-4. **元ファイルに戻る**: `await storage.openFile(projectId, originalFileId)` → 再接続 → 再初期化
+4. **元ファイルに戻る**: `await storage.openFile(projectId, originalFileId)` → 再接続 → `activate` 再呼び出し
 5. **ライブラリ接続**: `await storage.linkLibrary(originalFileId, libFileId)`
 
 ## 成果物

@@ -56,7 +56,7 @@ Plugin API の `set.active` はサーバーに永続化されないため、Play
 | `toggle-set` | `{ action: "toggle-set", setName: string, active: boolean }` | 指定セットの active/inactive を切替 |
 | `list-sets` | `{ action: "list-sets" }` | 全セットの名前と active 状態を返却 |
 
-`penpot-init.js` の `storage.toggleSetPersistent()` / `storage.switchThemePersistent()` がこのエンドポイントを内部で使用する。
+`storage.toggleSetPersistent()` / `storage.switchThemePersistent()` がこのエンドポイントを内部で使用する。
 
 #### アクセス経路
 
@@ -67,7 +67,7 @@ execute_code (Plugin iframe)
   → ブラウザ Cookie 付与 → Penpot Backend (:6060)
 ```
 
-port 3000 はコンテナ内部のみ（ホスト非公開）。`penpot-rest-api.js` の `storage.api()` / `storage.openFile()` が使用。
+port 3000 はコンテナ内部のみ（ホスト非公開）。`storage.api()` / `storage.openFile()` が使用。
 
 ## ユーザーアカウント構成
 

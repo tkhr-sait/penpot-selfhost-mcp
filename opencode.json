@@ -1,5 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "disabled_providers": ["opencode"],
+  "autoupdate": false,
+  "experimental": {
+    "openTelemetry": false
+  },
   "provider": {
     "lmstudio": {
       "npm": "@ai-sdk/openai-compatible",
@@ -8,23 +14,22 @@
         "baseURL": "http://host.docker.internal:1234/v1"
       },
       "models": {
-        "qwen/qwen3-coder-next": {
-          "name": "qwen/qwen3-coder-next"
+        // M4mac 128GB での動作
+        "unsloth/qwen3.5-397b-a17b": {
+          // Visionがあるのが良い。が遅い... context-length: 90kくらいで125GB...
+          "name": "unsloth/qwen3.5-397b-a17b(2026.2,397B,TQ1_0,96GB)"
         },
-        "unsloth/minimax-m2.5": {
-          "name": "minimax-m2.5"
+        "unsloth/minimax-m2.5@iq3_xxs": {
+          // 遅い... context-length: 90kくらいで125GB...
+          "name": "unsloth/minimax-m2.5(2026.2,229B,IQ3_XXS,93GB)"
+        },
+        "unsloth/minimax-m2.5@iq2_m": {
+          // メモリに収まるし、実用的な速さ context-length: 128kくらい
+          "name": "unsloth/minimax-m2.5(2026.2,229B,IQ2_M,78GB)"
         },
         "unsloth/qwen3-coder-next": {
-          "name": "qwen3-coder-next"
-        },
-        "openai/gpt-oss-120b": {
-          "name": "openai/gpt-oss-120b"
-        },
-        "zai-org/glm-4.7-flash": {
-          "name": "zai-org/glm-4.7-flash"
-        },
-        "nvidia/nemotron-3-nano": {
-          "name": "nvidia/nemotron-3-nano"
+          // メモリに収まるし、実用的な速さ context-length: 256kくらい指定できるが、動きは良くない...
+          "name": "unsloth/qwen3-coder-next(2026.2,80B,Q6_K_XL,68GB)"
         }
       }
     }
@@ -34,7 +39,7 @@
       "type": "local",
       "command": ["docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
-        "run", "--rm", "-T", "penpot-proxy",
+        "run", "--build", "--rm", "-T", "penpot-proxy",
         "--upstream=http://localhost:4401/mcp"
       ],
       "enabled": true
@@ -47,6 +52,18 @@
         "--upstream=http://localhost:6007/mcp"
       ],
       "enabled": true
+    }
+  },
+  "agent": {
+    "penpot-mcp": {
+      "description": "Penpot MCP 操作の実行。ボード作成、テキスト配置、スタイル適用、トークン操作、デザイン検証など、複数の execute_code 呼び出しが必要なデザイン操作を委譲。前提: /penpot スキル（SKILL.md）のロード後にのみ使用。直接呼び出し禁止。",
+      "mode": "subagent",
+      "prompt": "{file:.claude/agents/penpot-mcp.md}",
+      "tools": {
+        "penpot-official_*": true,
+        "read": true,
+        "edit": false
+      }
     }
   }
 }

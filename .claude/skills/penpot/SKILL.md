@@ -9,11 +9,9 @@ argument-hint: "[起動|停止|デザイン|デザインシステム|アプリ�
 
 # Penpot MCP Integration
 
-$ARGUMENTS に応じてルーティングし、必要なリファレンス・スクリプトを Read して実行する。
+$ARGUMENTS に応じてルーティングし、必要なリファレンスを Read して実行する。
 
 ## ツール名規約
-
-本スキル内で使用するツールは以下の正式名称で呼び出すこと:
 
 | 短縮形 | 正式ツール名 |
 |--------|-------------|
@@ -24,9 +22,9 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 | high_level_overview | `mcp__penpot-official__high_level_overview` |
 | penpot-manage.sh | `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh` |
 
-> **注意**: `execute_code` 単体だと IDE の `mcp__ide__executeCode` にマッチする可能性がある。必ず `mcp__penpot-official__` プレフィックス付きで呼び出すこと。`penpot-manage.sh` も settings.json の許可パターンと一致させるため正式ツール名通りの相対パスで呼び出すこと。
+> `execute_code` は必ず `mcp__penpot-official__` プレフィックス付きで呼び出すこと（IDE の `mcp__ide__executeCode` との混同防止）。`penpot-manage.sh` も正式ツール名通りの相対パスで呼び出すこと。
 
-**初期化**: `mcp__penpot-official__activate` を呼び出してセッション開始（penpot-init.js 自動実行）。ルートごとに「Read」列のファイルを Read する。追加の `.js`（token-utils.js 等）は `mcp__penpot-official__execute_code` で初期化。
+**初期化**: `activate` を呼び出してセッション開始（storage ラッパー自動初期化）。ルートごとに「Read」列のファイルを Read する。
 
 ## ルーティングマップ
 
@@ -34,11 +32,11 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 |---|---|---|
 | なし / 起動 / 設定 / 利用可能にして | [環境セットアップ](#環境セットアップ) | [selfhost.md](reference/selfhost.md) |
 | 停止 / down / status / ログ | 環境セットアップ（コマンド実行） | — |
-| DS構築 / トークン定義 | [デザインシステム構築](#デザインシステム構築) | [mcp-api.md](reference/mcp-api.md), [token-utils.js](scripts/mcp-snippets/token-utils.js), [design.md](reference/design.md) + フェーズ誘導で該当ファイル |
-| コンポーネント / ライブラリ | DS構築（Phase 04-05） | [mcp-api.md](reference/mcp-api.md), [design.md](reference/design.md), [workflow/phase-04](reference/workflow/phase-04-components.md) or [05](reference/workflow/phase-05-library.md), [library-architecture.md](reference/library-architecture.md), [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) |
-| デザイン / 画面 / UI | [デザイン作成](#デザイン作成) | [mcp-api.md](reference/mcp-api.md), [token-utils.js](scripts/mcp-snippets/token-utils.js), [design.md](reference/design.md) |
-| アプリ作成 / コード生成 / コード変換 | [アプリケーション作成](#アプリケーション作成) | [token-sync.js](scripts/mcp-snippets/token-sync.js), [pipeline/02-style-dictionary.md](reference/pipeline/02-style-dictionary.md) |
-| トークン同期 / DTCG | [外部パイプライン](#外部パイプライン)（01） | [mcp-api.md](reference/mcp-api.md), [pipeline/01-token-sync.md](reference/pipeline/01-token-sync.md), [token-sync.js](scripts/mcp-snippets/token-sync.js) |
+| DS構築 / トークン定義 / テーマ / ダーク / ライト | [デザインシステム構築](#デザインシステム構築) | [mcp-api.md](reference/mcp-api.md), [design.md](reference/design.md) + フェーズ誘導で該当ファイル |
+| コンポーネント / ライブラリ | DS構築（Phase 04-05） | [mcp-api.md](reference/mcp-api.md), [design.md](reference/design.md), [workflow/phase-04](reference/workflow/phase-04-components.md) or [05](reference/workflow/phase-05-library.md), [library-architecture.md](reference/library-architecture.md) |
+| デザイン / 画面 / UI / プロトタイプ | [デザイン作成](#デザイン作成) | [mcp-api.md](reference/mcp-api.md), [cookbook/](reference/cookbook/), [design.md](reference/design.md) |
+| アプリ作成 / コード生成 / コード変換 | [アプリケーション作成](#アプリケーション作成) | [pipeline/overview.md](reference/pipeline/overview.md), [mcp-api.md](reference/mcp-api.md) |
+| トークン同期 / DTCG | [外部パイプライン](#外部パイプライン)（01） | [mcp-api.md](reference/mcp-api.md), [pipeline/01-token-sync.md](reference/pipeline/01-token-sync.md) |
 | SD / CSS変数 / SCSS | 外部パイプライン（02） | [pipeline/02-style-dictionary.md](reference/pipeline/02-style-dictionary.md) |
 | Storybook | 外部パイプライン（03） | [pipeline/03-storybook.md](reference/pipeline/03-storybook.md) |
 | VRT / Lost Pixel | 外部パイプライン（04） | [pipeline/04-vrt.md](reference/pipeline/04-vrt.md) |
@@ -46,33 +44,17 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 | コメント / レビュー | [コメント管理](#コメント管理) | [mcp-api.md](reference/mcp-api.md), [comments.md](reference/comments.md) |
 | その他 | 引数内容に応じて判断 | — |
 
-## サポートファイル一覧
-
-**リファレンス**: [selfhost.md](reference/selfhost.md) | [mcp-api.md](reference/mcp-api.md) | [comments.md](reference/comments.md) | [design.md](reference/design.md) | [workflow/phase-01〜08](reference/workflow/) | [library-architecture.md](reference/library-architecture.md) | [pipeline/overview + 01〜04](reference/pipeline/)
-
-**スクリプト**: [penpot-manage.sh](scripts/penpot-selfhost/penpot-manage.sh) | [penpot-init.js](scripts/mcp-snippets/penpot-init.js) | [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js) | [validate-design.js](scripts/mcp-snippets/validate-design.js) | [token-sync.js](scripts/mcp-snippets/token-sync.js) | [token-utils.js](scripts/mcp-snippets/token-utils.js)
-
 ---
 
 ## 環境セットアップ
 
 **前提**: Docker 利用可能 | **参照**: → [selfhost.md](reference/selfhost.md)
 
-「起動して」等の要求には以下を自動実行:
+起動: `penpot-manage.sh status` → `up` → `mcp-connect` → `wait-mcp claude`（OK まで待機）→ `activate`
+停止: `penpot-manage.sh down` / 状態: `status` / ログ: `logs`
 
-1. `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh status` で状態確認
-2. `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh up` で Docker 起動
-3. `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh mcp-connect` で MCP 接続開始
-4. ログで接続完了を待つ:
-   `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh wait-mcp claude`
-   （OK が返れば完了。TIMEOUT ならログを確認）
-5. `mcp__penpot-official__activate` でセッション開始（penpot-init.js 自動実行 + 動作確認）
-6. エラー時は `activate` を再度呼び出す
-
-停止: `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh down` / 状態: `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh status` / ログ: `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh logs`
-
-**重要**: 環境操作は必ず `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh` 経由。`docker compose` 直接実行はポート競合の原因。
-**MCP再接続**: ツール呼び出しエラー時は `mcp__penpot-official__activate` を再度呼び出す。ユーザーへの `/mcp` → Reconnect 案内は不要。
+**重要**: 環境操作は必ず `penpot-manage.sh` 経由（`docker compose` 直接実行はポート競合の原因）。
+**MCP再接続**: エラー時は `activate` を再度呼び出す。
 
 ---
 
@@ -80,26 +62,23 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 
 **前提**: MCP接続済み | **参照**: → [design.md](reference/design.md)
 
-8フェーズで段階的に構築（01 監査 → 02 ラフスケッチ → 03 トークン定義 → 04 コンポーネント → 05 ライブラリ → 06 プロトタイプ → 07 ハンドオフ → 08 運用）。
-全フェーズ共通で `mcp__penpot-official__activate` でセッション開始。
-返却値の `context` でページ一覧・トークン・コンポーネント状態を確認。
-ページ選択後は `storage.getPageContext()` でボード一覧を取得。
+8フェーズ（01 監査 → 02 ラフスケッチ → 03 トークン → 04 コンポーネント → 05 ライブラリ → 06 プロトタイプ → 07 ハンドオフ → 08 運用）。
 
-**フェーズ判定**（キーワードが曖昧な場合）: `activate` 返却の `metrics` で状態確認
+**フェーズ判定**: `activate` 返却の `metrics` で状態確認
 - `metrics.tokenSets` = 0 → Phase 01 or 03 から
 - `metrics.tokenSets` > 0 + `metrics.components` = 0 → Phase 04 から
 - `metrics.components` > 0 + `metrics.connectedLibs` = 0 → Phase 05 から
 - 全 > 0 → Phase 07 or 08
 
-**フェーズ誘導**（該当フェーズの workflow/ ファイルを Read）:
+**フェーズ誘導**（該当 workflow/ ファイルを Read）:
 - 「ゼロから」→ [phase-01-audit.md](reference/workflow/phase-01-audit.md) から順に
 - 「トークン整理」→ [phase-03-tokens.md](reference/workflow/phase-03-tokens.md)
 - 「コンポーネント」→ [phase-04-components.md](reference/workflow/phase-04-components.md)
-- 「ライブラリ分割」→ [phase-05-library.md](reference/workflow/phase-05-library.md) + [library-architecture.md](reference/library-architecture.md) + [penpot-rest-api.js](scripts/mcp-snippets/penpot-rest-api.js)
+- 「ライブラリ分割」→ [phase-05-library.md](reference/workflow/phase-05-library.md) + [library-architecture.md](reference/library-architecture.md)
 - 「コード連携」→ [phase-07-handoff.md](reference/workflow/phase-07-handoff.md)
 - 「運用ルール」→ [phase-08-maintenance.md](reference/workflow/phase-08-maintenance.md)
 
-**追加スクリプト**: Phase 01/08 監査 → [validate-design.js](scripts/mcp-snippets/validate-design.js) / Phase 03 トークン定義 → [token-utils.js](scripts/mcp-snippets/token-utils.js) / Phase 03 トークン import/export → [token-sync.js](scripts/mcp-snippets/token-sync.js)
+**スクリプト**: 監査 → `storage.validateDesign()` / トークン → `storage.exportTokensDTCG()` / `await storage.importTokensDTCG()`
 
 ---
 
@@ -107,15 +86,18 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンス・ス
 
 **前提**: MCP接続済み | **参照**: → [design.md](reference/design.md)
 
-4フェーズ（理解→設計→**実装**→レビュー）で作成。
+4フェーズ（理解→設計→**実装**→レビュー）。Phase 1-2 はスキル内、Phase 3 は penpot-mcp サブエージェントに委譲（→ [委譲戦略](#サブエージェント委譲戦略)）。
 
-Phase 1-2（理解・設計）はスキル内、Phase 3（実装）は penpot-mcp サブエージェントに委譲。
-委譲の判定・指示方法は [サブエージェント委譲戦略](#サブエージェント委譲戦略) を参照。
+**実装判定**: `activate` 返却の `metrics` でスコープ決定
+- `metrics.tokenSets` = 0 → `storage.ensureSemanticTokens()` でデフォルトトークン適用を指示に含め、画面構築と一括委譲（cookbook: [multi-screen-prototype.md](reference/cookbook/multi-screen-prototype.md)）
+- `metrics.tokenSets` > 0 → 既存トークン使用。`ensureSemanticTokens` は呼ばない。画面構築のみ委譲
 
-**レビュー**: `mcp__penpot-official__export_shape` で確認 → [validate-design.js](scripts/mcp-snippets/validate-design.js) で検証。
-**操作完了時は `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh urls` の出力で確認用 URL を案内。**
+**cookbook 選択**: サブエージェントへの Read 指示に含める
+- 複数画面 + テーマ → [multi-screen-prototype.md](reference/cookbook/multi-screen-prototype.md)
+- 単一画面（ダッシュボード等） → [kanban.md](reference/cookbook/kanban.md)
+- トークンのみ → [token-registration.md](reference/cookbook/token-registration.md)
 
-**次のステップ**: デザインにトークンが定義されている場合、アプリケーション側で利用するには [外部パイプライン](#外部パイプライン)(01-02) で CSS 変数に変換する。全体フローは [アプリケーション作成](#アプリケーション作成) を参照。
+**レビュー**: `export_shape` で確認 → `validateDesign()` で検証。完了時: `penpot-manage.sh urls` で URL 案内。
 
 ---
 
@@ -123,100 +105,60 @@ Phase 1-2（理解・設計）はスキル内、Phase 3（実装）は penpot-mc
 
 **前提**: MCP接続済み | **参照**: → [pipeline/overview.md](reference/pipeline/overview.md), [mcp-api.md](reference/mcp-api.md)
 
-Penpot のデザインをもとにアプリケーションコードを生成する、または既存アプリを Penpot のデザインシステム管理下に置くためのフロー。
-**Penpot にトークンが定義されている場合はパイプライン経由で CSS 変数として利用すること。**
+1. `activate` の `metrics` + `getPageContext()` でボード有無確認（なし → [デザイン作成](#デザイン作成)へ）
+2. `metrics.tokenSets` > 0 → [外部パイプライン](#外部パイプライン)(01-02) でトークンを CSS 変数に変換 → コード実装
+3. `metrics.tokenSets` = 0 → 直接値で実装（DS管理するなら [DS構築](#デザインシステム構築) Phase 03 でトークン定義）
 
-### フロー判定
-
-1. **デザイン確認**: `activate` の `metrics` + `storage.getPageContext()` でボードの有無を確認
-   - `getPageContext().boards.length` = 0 → [デザイン作成](#デザイン作成) を先に実行
-2. **トークン確認**: `metrics.tokenSets` を確認
-   - > 0 → Step 3 へ
-   - = 0 → 直接値で実装可。DS管理を始めるなら [デザインシステム構築](#デザインシステム構築) Phase 03 でトークン定義
-3. **パイプライン実行**: [外部パイプライン](#外部パイプライン)(01-02) の手順に従いトークンを CSS 変数に変換
-4. **コード実装**: 生成された CSS 変数を使用してアプリを構築。
-   デザイン抽出方法は [mcp-api.md](reference/mcp-api.md) を参照
-
-### 既存アプリへの適用
-
-1. 既存アプリの CSS からデザイン値を抽出
-2. [デザインシステム構築](#デザインシステム構築) で Penpot にトークンを定義
-3. [外部パイプライン](#外部パイプライン)(01-02) でエクスポート
-4. 既存 CSS のハードコード値をトークン変数に置換
+**既存アプリ**: CSS からデザイン値抽出 → DS構築でトークン定義 → パイプライン 01-02 でエクスポート → ハードコード値をトークン変数に置換
 
 ---
 
 ## 外部パイプライン
 
-**前提**: Penpot にトークンが定義されていること | **参照**: → [pipeline/overview.md](reference/pipeline/overview.md)
+**前提**: トークン定義済み | **参照**: → [pipeline/overview.md](reference/pipeline/overview.md)
 
-**パイプライン判定**（キーワードが曖昧な場合）: Bash で状態確認
-- `tokens/` に JSON なし → Pipeline 01（トークンエクスポートから）
-- `style-dictionary.config.*` なし → Pipeline 02（SD セットアップから）
-- `build/css/` なし → Pipeline 02（SD ビルドから）
-- Storybook 未起動 → Pipeline 03
-- 全完了 → Pipeline 04
-
-該当 Pipeline のファイルを Read し手順に従う。トークン操作時は [token-sync.js](scripts/mcp-snippets/token-sync.js) を Read → `mcp__penpot-official__execute_code` で初期化。
+**判定**: `tokens/` に JSON なし → 01 / `style-dictionary.config.*` なし → 02 / Storybook 未起動 → 03 / 全完了 → 04
+該当 Pipeline のファイルを Read し手順に従う。
 
 ---
 
 ## コメント管理
 
-**前提**: MCP接続済み | **参照**: → [comments.md](reference/comments.md)
-
-[comments.md](reference/comments.md) の手順に従い、未解決コメントの確認・返信・解決を行う。
+**前提**: MCP接続済み | [comments.md](reference/comments.md) の手順に従い未解決コメントの確認・返信・解決を行う。
 
 ---
 
 ## 実装フェーズの開始手順
 
-計画モードから復帰して実装を開始する際、コンテキスト圧縮によりスキル内容が失われている可能性がある。以下を必ず実行すること:
+plan 復帰時、コンテキスト圧縮でスキル知識が消失している可能性あり。**plan Step 1 に `/penpot` スキルリロードを含めること。**
 
-**plan 作成時（Claude Code）**: plan の Step 1 に `/penpot` スキルリロード（Skill ツール）を含めること。
-コンテキストクリア後の plan 実行時にスキル知識が自動復元される。
-
-1. **スキルロード**: `/penpot` でスキルを呼び出す（Skill ツール）。
-   スキル未ロード時はルーティングマップ・初期化手順・サブエージェント戦略が利用不可。
-2. **セッション開始**: `mcp__penpot-official__activate` を呼び出す（penpot-init.js 自動実行）。
-3. **リファレンス再読込**: ルーティングマップの「Read」列に記載されたファイルを Read し直す
-4. **サブエージェント委譲**: MCP execute_code が多数必要な操作（トークンエクスポート、デザイン構築等）は `penpot-mcp` サブエージェントに委譲する（→ [サブエージェント委譲戦略](#サブエージェント委譲戦略)）
+1. `/penpot` でスキルリロード
+2. `activate` でセッション開始
+3. ルーティングマップの「Read」列を Re-read
+4. MCP 操作は penpot-mcp サブエージェントに委譲（→ [委譲戦略](#サブエージェント委譲戦略)）
 
 ---
 
 ## サブエージェント委譲戦略
 
-MCP execute_code の大量呼び出し（10〜30回）によるコンテキスト消費を防ぐため、実装フェーズは `penpot-mcp` サブエージェントに委譲する。
+MCP execute_code の大量呼び出し（20〜70回）によるコンテキスト消費を防ぐため、実装は `penpot-mcp` サブエージェントに委譲する。
 
-### 委譲すべきタスク
-
-| タスク | 委譲 | 理由 |
-|--------|------|------|
-| 画面構築（ボード + 子要素） | ✅ | execute_code 多数 |
-| トークン一括定義 | ✅ | バッチ操作 |
-| コンポーネント作成 | ✅ | execute_code 多数 |
-| インタラクション設定 | ✅ | API 型確認 + 設定 |
-| export_shape でレビュー | ⚠️ 場合による | 1回なら直接、複数なら委譲 |
-| 環境起動/停止 | ❌ | Bash コマンドのみ |
-| ユーザーへの質問 | ❌ | AskUserQuestion はスキル内 |
+**委譲**: 画面構築 / トークン定義 / コンポーネント / インタラクション → ✅
+**直接**: 環境操作 / ユーザー質問 / 単発 export → ❌
 
 ### サブエージェントへの指示テンプレート
 
 サブエージェントには以下を必ず含めること:
 1. **エージェント定義の Read 指示**: `.claude/agents/penpot-mcp.md` を最初に Read
-2. **storage の現在状態**: 初期化済みヘルパー、既存ボードの ID/名前
-3. **具体的な成果物定義**: 何を作り、何を返すか
-4. **デザイン仕様**: カラー、サイズ、レイアウト、テキスト内容
-
-### GitHub Copilot 用エージェント
-Copilot Agent Mode 用は `.github/agents/penpot-mcp.agent.md`。Claude Code 版と同等だがツール名形式が異なる（`penpot-official/*` vs `mcp__penpot-official__*`）。
+2. **作業スコープ**: metrics 判定に基づき「やること・やらないこと」を明示（例: 「トークン定義済み。画面構築のみ。トークン定義は不要」）
+3. **Read する cookbook**: 要件に合う cookbook ファイルパスを指定
+4. **storage の現在状態**: 初期化済みヘルパー、既存ボードの ID/名前
+5. **具体的な成果物定義**: 何を作り、何を返すか
+6. **デザイン仕様**: → [cookbook/delegation-format.md](reference/cookbook/delegation-format.md) の構造化フォーマットに従う
 
 ---
 
-## 複合タスクの実行管理
+## 補足
 
-複合タスクでは `.penpot-task.md` に計画・進捗・キーパスを記録し、コンテキスト圧縮時に Read して復元。
-
-## API 制約（全操作共通）
-
-→ [mcp-api.md の「Plugin API 実践的制約」](reference/mcp-api.md#plugin-api-実践的制約) を参照
+- 複合タスクでは `.penpot-task.md` に計画・進捗・キーパスを記録し、コンテキスト圧縮時に Read して復元
+- API 制約 → [mcp-api.md「Plugin API 実践的制約」](reference/mcp-api.md#plugin-api-実践的制約)

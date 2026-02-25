@@ -1,6 +1,7 @@
 // ============================================================
-// Penpot REST API Utilities
-// Read this file, then run via MCP execute_code.
+// Penpot REST API Utilities (init.d: 00)
+//
+// activate 時に自動実行。冪等（再呼び出しでも安全）。
 //
 // Provides: storage.api, storage.getProfile, storage.getTeamId,
 //           storage.getProjects, storage.createProject,
@@ -9,8 +10,12 @@
 //           storage.getSharedLibraries, storage.getFileLibraries,
 //           storage.linkLibrary, storage.unlinkLibrary,
 //           storage.openFile, storage.waitForReconnect,
-//           storage.getFile
+//           storage.getFile, storage.getCurrentProjectId
 // ============================================================
+
+if (!storage.__restApiDone) {
+
+storage.__wrappers = storage.__wrappers || [];
 
 // ---------------------------------------------------------------------------
 // タイムアウトヘルパー（プラグインコンテキストに AbortController がないため Promise.race）
@@ -151,7 +156,7 @@ storage.openFile = async (projectId, fileId) => {
   return res.json();
   // 注意: この関数の戻り後、MCP 接続は一時切断される
   // 再接続は mcp-connect が自動で行う（10-15秒）
-  // 再接続後、penpot-init.js と penpot-rest-api.js の再初期化が必要
+  // 再接続後、activate 再呼び出しで全スクリプト再初期化が必要
 };
 
 storage.waitForReconnect = async (timeout = 30000) => {
@@ -191,3 +196,24 @@ storage._uuid = () => {
   });
 };
 
+storage.__wrappers.push(
+  { fn: 'await storage.api(cmd, params, timeout)', replaces: 'fetch(/api-proxy)', reason: 'REST API+タイムアウト+認証' },
+  { fn: 'await storage.openFile(projectId, fileId)', replaces: null, reason: 'Playwrightナビゲーション+MCP再接続' },
+  { fn: 'await storage.waitForReconnect(timeout)', replaces: null, reason: 'MCP再接続待機' },
+  { fn: 'await storage.getTeamId()', replaces: null, reason: 'Shared Workspace チーム優先取得' },
+  { fn: 'await storage.getProfile()', replaces: null, reason: 'ユーザープロフィール取得（キャッシュ付き）' },
+  { fn: 'await storage.getProjects()', replaces: null, reason: 'プロジェクト一覧' },
+  { fn: 'await storage.createProject(name)', replaces: null, reason: 'プロジェクト作成' },
+  { fn: 'await storage.getProjectFiles(projectId)', replaces: null, reason: 'ファイル一覧' },
+  { fn: 'await storage.createFile(projectId, name, opts)', replaces: null, reason: 'ファイル作成（isShared 対応）' },
+  { fn: 'await storage.duplicateFile(fileId, name)', replaces: null, reason: 'ファイル複製' },
+  { fn: 'await storage.setFileShared(fileId, bool)', replaces: null, reason: 'ファイル共有設定' },
+  { fn: 'await storage.getSharedLibraries()', replaces: null, reason: '共有ライブラリ一覧' },
+  { fn: 'await storage.linkLibrary(fileId, libraryId)', replaces: null, reason: 'ライブラリ接続' },
+  { fn: 'await storage.unlinkLibrary(fileId, libraryId)', replaces: null, reason: 'ライブラリ切断' },
+  { fn: 'await storage.getCurrentProjectId()', replaces: null, reason: '接続中ファイルのプロジェクトID' },
+  { fn: 'await storage.getFile(fileId)', replaces: null, reason: 'ファイル情報取得' },
+);
+
+storage.__restApiDone = true;
+}

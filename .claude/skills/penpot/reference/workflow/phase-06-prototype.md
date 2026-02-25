@@ -20,46 +20,9 @@
 2. デザイナー・開発者・ステークホルダーが同一画面で議論
 3. ユーザビリティテストの結果を反映しコンポーネントを改善
 
-## MCP によるプロトタイプ構築
+## MCP による実装
 
-`penpot-init.js` 初期化後:
-
-### ページ管理
-`storage.createAndOpenPage('Prototype')` でプロトタイプ用ページ作成。複数ページ作業時は `storage.assertCurrentPage()` でガード。
-
-### インタラクション設定
-`mcp__penpot-official__execute_code` でシェイプにインタラクションを追加:
-
-```javascript
-// クリックで別ボードに遷移
-button.addInteraction('click', {
-  type: 'navigate-to',
-  destination: targetBoard
-});
-
-// クリックでオーバーレイを閉じる
-closeBtn.addInteraction('click', {
-  type: 'close-overlay'
-});
-
-// クリックで前の画面に戻る
-backBtn.addInteraction('click', {
-  type: 'previous-screen'
-});
-
-// クリックで外部URLを開く
-link.addInteraction('click', {
-  type: 'open-url',
-  url: 'https://example.com'
-});
-```
-
-> **重要**: 起点と遷移先は同一ページ内に配置すること。
-
-> **⚠ open-overlay / toggle-overlay は Plugin API で未実装** — `addInteraction` が `undefined` を返し保存されない。回避策: `navigate-to` で設定後、Penpot UI で手動で OpenOverlay に変更する。
-
-### レビュー
-`validate-design.js` で検証 → `mcp__penpot-official__export_shape` でエクスポート。`storage.getFileComments()` で未解決フィードバックを確認。
+画面構築・インタラクション設定・レビューの実装パターンは [cookbook/kanban.md](../cookbook/kanban.md) を参照。
 
 ## 成果物
 - インタラクティブプロトタイプ（Penpot）

@@ -20,7 +20,7 @@ Style Dictionary v4 は W3C DTCG 形式（`$value`, `$type`）をネイティブ
 | `fontWeight` は数値文字列 | `"400"` でOK |
 | `color` は CSS カラー値 | `"#2563eb"` 等 |
 
-`token-sync.js` の `exportTokensDTCG()` は dimension 系に `px` を自動付与するため、エクスポートした JSON はそのまま SD に入力可能。
+`storage.exportTokensDTCG()` は dimension 系に `px` を自動付与するため、エクスポートした JSON はそのまま SD に入力可能。
 
 ## 設定テンプレート
 

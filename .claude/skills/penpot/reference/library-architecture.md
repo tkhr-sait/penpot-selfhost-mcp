@@ -99,7 +99,7 @@ const components = penpot.library.local.components;
 
 ### REST API によるライブラリ管理
 
-`penpot-rest-api.js` を初期化すれば、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
+activate 時に自動初期化される REST API ユーティリティで、ファイル作成・共有設定・ライブラリ接続が MCP で完結する。
 
 #### ワークフロー
 
@@ -121,7 +121,7 @@ const libFile = await storage.createFile(projectId, 'UI Components Lib', { isSha
 
 // 2. openFile でライブラリファイルに切り替え（MCP 再接続が発生）
 await storage.openFile(projectId, libFile.id);
-// → 再接続後、penpot-init.js + penpot-rest-api.js を再初期化
+// → 再接続後、activate 再呼び出しで storage ラッパー再初期化
 // → Plugin API でコンポーネント登録
 
 // 3. 元ファイルにライブラリ接続

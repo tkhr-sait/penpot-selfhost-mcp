@@ -16,10 +16,10 @@ Penpot のデザイントークンと リポジトリの JSON ファイルを双
 
 ## MCP 操作
 
-事前に `token-sync.js` を Read → `mcp__penpot-official__execute_code` で初期化:
+`activate` 実行後、以下の storage メソッドが使用可能:
 
 ```javascript
-// エクスポート: Penpot → DTCG JSON
+// エクスポート: Penpot → DTCG JSON（同期）
 const json = storage.exportTokensDTCG();
 // → Claude Code の Write ツールで tokens/ 配下に保存
 
@@ -49,7 +49,7 @@ tokens/
 ## DTCG 変換
 
 `exportTokensDTCG()` が型変換・単位付与・`$extensions`（Penpot 元型の保持）を自動処理する。
-外部 DTCG JSON（`$extensions` なし）もインポート可能。変換の詳細は `token-sync.js` のコメントを参照。
+外部 DTCG JSON（`$extensions` なし）もインポート可能。変換の詳細は `20-token-sync.js` のコメントを参照。
 
 ## 既知問題と対処
 

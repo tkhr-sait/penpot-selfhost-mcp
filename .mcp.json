@@ -4,7 +4,7 @@
       "command": "docker",
       "args": [
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
-        "run", "--rm", "-T", "penpot-proxy",
+        "run", "--build", "--rm", "-T", "penpot-proxy",
         "--upstream=http://localhost:4401/mcp"
       ]
     },
@@ -12,7 +12,7 @@
       "command": "docker",
       "args": [
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
-        "run", "--rm", "-T", "storybook-proxy",
+        "run", "--build", "--rm", "-T", "storybook-proxy",
         "--upstream=http://localhost:6007/mcp"
       ]
     }

@@ -22,7 +22,7 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 
 | ツール | 用途 |
 |--------|------|
-| `mcp__penpot-official__activate` | セッション開始/再接続（penpot-init.js 自動実行） |
+| `mcp__penpot-official__activate` | セッション開始/再接続（storage ラッパー自動初期化） |
 | `mcp__penpot-official__execute_code` | Plugin API 環境でJavaScriptを実行 |
 | `mcp__penpot-official__export_shape` | シェイプをPNG/SVGでエクスポート（視覚確認） |
 | `mcp__penpot-official__penpot_api_info` | API型定義・メンバー情報を取得 |
@@ -30,9 +30,48 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 
 > **注意**: `activate` 以外の全ツールは `activate` 呼び出し前はエラーを返す。
 
+### activate レスポンス構造
+
+`activate` は storage ラッパーを自動初期化し、以下の構造のテキストを返す:
+
+```
+{
+  context: {
+    currentPage: { id, name },         // 現在開いているページ
+    pages: [{ id, name }],             // ファイル内全ページ一覧
+    tokenSets: ['Shared', 'Light', ...], // トークンセット名の配列
+    componentCount: 12,                // 登録済みコンポーネント数
+    connectedLibs: [{ id, name }]      // 接続済みライブラリ
+  },
+  metrics: {                           // フェーズ判定用数値
+    tokenSets: 2, components: 12, connectedLibs: 1, pages: 3
+  },
+  wrappers: [...]                      // storage ラッパー対応表
+}
+```
+
+- `context` で既存ページ・トークン状態を把握し、再利用 or 新規作成を判断する
+- `metrics` はスキルのフェーズ判定に使用（SKILL.md 参照）
+- WebSocket 切断時も `activate` 再呼び出しで復帰可能
+
 ## Plugin API リファレンス
 
-penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_overview` ツールで取得可能。型情報は `mcp__penpot-official__penpot_api_info` ツールで確認。
+```
+┌─────────────────────────────────────────┐
+│  storage（ラッパー層）                    │ ← 基本こちらを使う
+│  createText / createAndOpenPage / ...   │
+├─────────────────────────────────────────┤
+│  penpotUtils（検索・走査層）              │ ← 探すとき
+│  findShapes / getPages / tokenOverview  │
+├─────────────────────────────────────────┤
+│  penpot（ネイティブAPI層）               │ ← ボード/矩形作成・Flex設定
+│  createBoard / createRectangle / flex   │
+└─────────────────────────────────────────┘
+```
+
+**判断基準**: storage にラッパーがあればそちらを使う。ネイティブ直接呼び出しはバグ回避策が無効化されるため禁止。
+
+各層の詳細は `mcp__penpot-official__high_level_overview` ツールで取得可能。型情報は `mcp__penpot-official__penpot_api_info` ツールで確認。
 
 **注意**: `penpot.library.connectLibrary()` の返り値は不完全な場合がある（`name: null`, `components: []`）。
 `storage.connectLibrary(id)` ラッパーを使うか、接続後に `penpot.library.connected.find(l => l.id === id)` で再取得すること。
@@ -41,11 +80,12 @@ penpot / penpotUtils / storage の詳細は `mcp__penpot-official__high_level_ov
 
 ### storage ラッパー優先ルール
 
-penpot-init.js で初期化される storage ラッパーは、対応する penpot ネイティブメソッドの **代わりに** 使用すること。ネイティブメソッドを直接使うとバグや環境制約の回避策が無効化される。
+activate で初期化される storage ラッパーは、対応する penpot ネイティブメソッドの **代わりに** 使用すること。ネイティブメソッドを直接使うとバグや環境制約の回避策が無効化される。
 
 | 必ず使う | 使わない | 理由 |
 |---------|---------|------|
 | `storage.createText()` | `penpot.createText()` | fontFamily 未設定→0x0テキスト（エアギャップ環境） |
+| `storage.appendChild()` | `parent.appendChild()`+sleep+`layoutChild` | Flex/非Flex判定+sleep+layoutChild返却（null回避） |
 | `storage.createAndOpenPage()` | `penpot.createPage()`+`openPage()` | 切替検証・Page 1 再利用 |
 | `storage.connectLibrary()` | `penpot.library.connectLibrary()` | 返り値 name:null, components:[] 問題 |
 | `storage.toggleSetPersistent()` | `set.active = bool` | set.active は永続化されない（UI 自動化で回避） |
@@ -69,10 +109,27 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
   - 全ユーティリティ一覧: `high_level_overview` 参照
 - **不明な型・メソッド**: `penpot_api_info` で確認してから使用
 
+### ページ操作
+
+| メソッド | 用途 | 注意 |
+|---------|------|------|
+| `storage.createAndOpenPage(name)` | ページ作成+切替 | `await` 必須。空の Page 1 は自動再利用 |
+| `penpotUtils.getPages()` | ページ一覧取得 | `penpot.pages` は存在しない |
+| `penpotUtils.getPageById(id)` | ID でページ取得 | |
+| `penpot.openPage(page, false)` | ページ切替 | 第2引数 `false` 必須 |
+| `storage.assertCurrentPage(page)` | 現在ページの検証ガード | 違うページならエラー |
+| `storage.getPageContext()` | 現在ページのボード一覧 | `{ page, boards }` を返す |
+
+- 最低1ページ制約（最後のページは削除不可。削除は REST API `del-page`）
+- 複数ページ作業時は `assertCurrentPage` でシェイプ作成先を必ず確認する
+
 ### レイアウト
-- **layoutChild は appendChild 後に sleep 必須**: `layoutChild` は追加直後 `null`。100ms 以上の sleep 後にアクセスすること
+- **子要素追加は `storage.appendChild()` を使う**: Flex/非Flex 判定 + 100ms sleep + `layoutChild` 返却を自動処理
+  ```javascript
+  const lc = await storage.appendChild(flexParent, child);
+  lc.horizontalSizing = 'fill'; // lc は child.layoutChild（非Flex親ではnull）
+  ```
 - **Flex column/row の children 配列は視覚順序と逆**: `appendChild` は配列先頭に挿入 → 視覚的末尾に追加（呼び出し順 = 表示順）
-- **子要素追加**: Flex 親は `appendChild`、非 Flex 親は `insertChild(children.length, shape)`
 
 ### テキスト
 - `storage.createText()` で fontFamily 自動設定（sourcesanspro）
@@ -87,12 +144,37 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 - `token.value` は読み取り専用 → `remove()` + `addToken()` で更新
 - `addSet()` 戻り値は即時読取不可 → `catalog.sets.find()` で再取得
 - 大量操作は 10件バッチ + 200ms sleep（WebSocket 切断対策。切断しても MCP 再接続は不要、自動復帰）
+- `storage.applyTokenSafe()` のトークンタイプ→プロパティ対応:
+
+| トークンタイプ | 適用プロパティ |
+|--------------|-------------|
+| `color` | `fill`, `stroke-color` |
+| `spacing` | `row-gap`, `column-gap`, `p1`(top) `p2`(right) `p3`(bottom) `p4`(left), `m1`... |
+| `borderRadius` | `r1`(top-left) `r2`(top-right) `r3`(bottom-right) `r4`(bottom-left) |
+| `sizing` | `width`, `height` |
+
+#### デフォルトセマンティックトークン
+
+新規プロジェクトでデフォルトの14色+スペーシング+角丸トークンを一括登録:
+```javascript
+await storage.ensureSemanticTokens();
+// カスタマイズ: await storage.ensureSemanticTokens({ overrides: { 'accent-blue': { light: '#007AFF', dark: '#64B5F6' } } })
+// 既存トークンがあれば自動スキップ（force: true で上書き）
+// Typography 追加: await storage.ensureSemanticTokens({ includeTypography: true })
+```
+トークン一覧は `storage.SEMANTIC_TOKEN_DEFAULTS` で参照可能。
+
+#### トークン登録パターン（個別登録）
+
+`storage.ensureTokenSet` → `storage.ensureToken` / `storage.ensureTokenBatch` → `storage.applyTokenSafe` の順で冪等登録・適用。`penpotUtils.tokenOverview()` で確認。
+
+コード例 → [cookbook: トークン一括登録](cookbook/token-registration.md)
 
 ### テーマ管理
 - `catalog.addTheme('group', 'name')` でテーマ作成（引数は2つの文字列、オブジェクトではない）
 - `theme.addSet(setObj)` でテーマにセットを関連付け
 - **⚠ `theme.toggleActive()` は WebSocket 切断を引き起こす** — 使用禁止。テーマ切替はセット単位で `set.active = true/false` を使う
-- **⚠ `theme.activeSets` は常に null** — テーマ→セット関連の読み取りは不可
+- **⚠ `theme.activeSets` は常に null** — Plugin API でのテーマ→セット関連の直接読み取りは不可（[詳細](../../../docs/problems/theme-activeSets-null.md)）。`ensureTheme` のセッション内キャッシュ (`__themeSetMap`) が唯一の有効データソース
 
 #### Plugin API 永続化制約
 
@@ -106,7 +188,19 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 
 `theme.addSet()` と `set.active` の変更はページリロードで失われる。永続化には Playwright UI 自動化経由の `storage.toggleSetPersistent()` / `storage.switchThemePersistent()` を使用する。
 
+#### テーマ構築フロー（セット作成→テーマ作成→関連付け）
+
+1. `storage.ensureTokenSet()` でベース→テーマ固有の順にセット作成
+2. `storage.ensureToken()` でテーマ固有値を登録
+3. `storage.ensureTheme(group, name, sets[])` で冪等にテーマ作成+セット関連付け
+4. `storage.switchThemePersistent()` で永続化
+
+コード例 → [cookbook: テーマ構築](cookbook/theme-setup.md)
+
 ### テーマ切替（セットの active 制御）
+
+> **⚠ Light/Dark 用に別々のボードを作成しない。** 同一ボードでトークンセットの ON/OFF を切り替えることでテーマを変更する。ボード複製はメンテナンスコスト倍増の原因。
+
 - **セット作成順序に注意**: Shared（ベース）セットを最初に作成し、テーマ固有セット（Dark/Light）を後に作成すること。
   `catalog.sets` の順序でトークン優先度が決まり、後のセットが優先される。
   `theme.addSet()` の呼び出し順序は優先度に影響しない（カタログ順のみが関係する）。
@@ -145,9 +239,39 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
   - **回避策**: `navigate-to` で設定後、Penpot UI で手動で OpenOverlay に変更
 - API 型は `mcp__penpot-official__penpot_api_info` で確認
 
+### コード生成（ハンドオフ）
+
+```javascript
+// CSS 生成（子要素含む）
+penpot.generateStyle(shapes, { type: 'css', withChildren: true });
+
+// HTML / SVG マークアップ生成
+penpot.generateMarkup(shapes, { type: 'html' });
+penpot.generateMarkup(shapes, { type: 'svg' });
+```
+
+- `shapes` は配列（単一シェイプも `[shape]` で渡す）
+- トークン値の取得: `storage.findToken(name)` — 未登録ならエラーに登録済み名を含む
+
 ### 全般
 - `mcp__penpot-official__high_level_overview` の API 仕様を遵守（insertChild、growType、Flex順序等）
-- 完了後の検証: [validate-design.js](../scripts/mcp-snippets/validate-design.js) で制約違反を検出
+- 完了後の検証: `return storage.validateDesign()` で制約違反を検出
+
+### よくあるハマりポイント
+
+| 問題 | 原因 | 解決策 |
+|------|------|--------|
+| テキストが 0x0 サイズ | `penpot.createText()` 直接使用 | `storage.createText()` を使う |
+| `layoutChild` が null | appendChild 直後にアクセス | `storage.appendChild()` を使う（sleep 内蔵） |
+| `hSizing` / `vSizing` が効かない | プロパティ名が違う | `horizontalSizing` / `verticalSizing` |
+| `execute_code` の結果が空 | 末尾の式評価では出力されない | `return` 文を使う |
+| トークン `set.active` がリロードで消える | Plugin API は永続化しない | `storage.switchThemePersistent()` |
+| `frame.findShapes()` がエラー | 存在しないメソッド（`page.findShapes()` とは別） | `penpotUtils.findShapes(pred, frame)` |
+| `penpot.pages` がエラー | 存在しないプロパティ | `penpotUtils.getPages()` |
+| インタラクションが動かない | 異なるページ間で設定 | 同一ページ内のボード間のみ有効 |
+| `OpenOverlay` が効かない | Plugin API 未実装 | `navigate-to` で代替 |
+| 大量操作で WebSocket 切断 | バースト過多 | 10件バッチ + 200ms sleep |
+| 切断後にカスタムヘルパーが消失 | WebSocket 自動復帰で storage リセット | 冪等ガード付きヘルパー登録を再実行（ビルトインは activate で復元） |
 
 ## セルフホスト環境固有の注意
 
@@ -163,7 +287,7 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 ### REST API 基本
 - 全エンドポイント POST + JSON。`Accept: application/json` ヘッダー必須
 - `storage.api(command, params, timeout)` でタイムアウト付き呼び出し（デフォルト10秒）
-- `penpot-rest-api.js` を `mcp__penpot-official__execute_code` で初期化して使用
+- `storage.api(command, params, timeout)` でタイムアウト付き呼び出し（activate 時に自動初期化済み）
 - ファイル一覧: `get-project-files`（`get-files` は存在しない）
 - `mcp__penpot-official__execute_code` から REST API を呼ぶ際は、mcp-connect コンテナ内のブリッジサーバー (port 3000) の `/api-proxy` を経由する。ブラウザセッションの Cookie が自動付与されるため、プラグイン側で認証情報を持つ必要がない。詳細は [selfhost.md の mcp-connect ブリッジサーバー](selfhost.md#mcp-connect-ブリッジサーバー) を参照
 
@@ -177,6 +301,10 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 
 ### ライブラリ管理
 - `createFile()` / `setFileShared()` / `linkLibrary()` / `unlinkLibrary()`
+
+`storage.createFile()` で isShared 付きファイル作成、`storage.linkLibrary()` で接続。
+コード例 → [cookbook: ライブラリ管理](cookbook/library-management.md)
+
 - `getCurrentProjectId()`: 接続中ファイルと同じプロジェクトにライブラリ作成
 - `getTeamId()`: Shared Workspace チームを優先
 - `get-file-libraries` は推移的依存も返す（重複表示されるが実害なし）
@@ -185,7 +313,7 @@ penpot-init.js で初期化される storage ラッパーは、対応する penp
 ### ファイル切替
 - `storage.openFile(projectId, fileId)` → ブリッジサーバーの `/navigate` エンドポイントを呼び出し、Playwright がワークスペース URL を遷移 → MCP 再接続発生（10-15秒）
 - `storage.waitForReconnect()` でブリッジサーバーの `/status` を polling し、`ready` になるまで待機
-- 再接続後、MCP ツールを呼び出して接続確認。エラー時のみ `/mcp` → Reconnect を案内。`penpot-init.js` + `penpot-rest-api.js` 再初期化が必要
+- 再接続後、MCP ツールを呼び出して接続確認。エラー時のみ `/mcp` → Reconnect を案内。`activate` 再呼び出しで storage ラッパー再初期化が必要
 
 ### 画像エクスポート
 - `board.export({ type: 'png', scale: 1.5 })` 推奨（2100x1500相当）

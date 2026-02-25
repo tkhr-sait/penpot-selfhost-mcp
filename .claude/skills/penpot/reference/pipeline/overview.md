@@ -71,7 +71,7 @@ Lost Pixel（ビジュアルリグレッションテスト）
 
 | Pipeline | ツール | やること | 詳細 |
 |----------|--------|----------|------|
-| 01 | MCP (token-sync.js) | Penpot ↔ リポジトリのトークン同期 | [01-token-sync.md](01-token-sync.md) |
+| 01 | MCP (storage.exportTokensDTCG / importTokensDTCG) | Penpot ↔ リポジトリのトークン同期 | [01-token-sync.md](01-token-sync.md) |
 | 02 | Style Dictionary | JSON → CSS 変数 / SCSS / Tailwind config | [02-style-dictionary.md](02-style-dictionary.md) |
 | 03 | Storybook | コンポーネント開発・カタログ | [03-storybook.md](03-storybook.md) |
 | 04 | Lost Pixel | ビジュアルリグレッションテスト | [04-vrt.md](04-vrt.md) |
@@ -87,7 +87,7 @@ Lost Pixel（ビジュアルリグレッションテスト）
 | SD ビルド | Bash → `npm run tokens:build` | CSS変数/SCSS/Tailwind 生成 |
 | コンポーネント一覧 | `mcp__penpot-official__execute_code` → `penpot.library.local.components` | Storybook スキャフォールド用 |
 
-事前に `token-sync.js` を Read → `mcp__penpot-official__execute_code` で初期化すること。
+これらは `activate` 時に自動初期化される。
 
 ## 最小構成
 

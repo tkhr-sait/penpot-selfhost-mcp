@@ -17,77 +17,17 @@
 
 ## MCP によるトークン一括登録
 
-`penpot-init.js` + `token-utils.js` 初期化後:
+`activate` 実行後（storage ラッパー自動初期化）:
 
 ### トークンの登録（ネイティブ API）
 
-```javascript
-// 冪等なセット取得/作成（同じスクリプトを2回実行しても安全）
-const { set } = await storage.ensureTokenSet('Semantic');
-
-// カラートークン（冪等: 既存なら値を更新、同値ならスキップ）
-await storage.ensureToken(set, 'color', 'color.primary', '#3B82F6');
-await storage.ensureToken(set, 'color', 'color.error', '#EF4444');
-
-// スペーシングトークン
-await storage.ensureToken(set, 'spacing', 'spacing.sm', '8');
-await storage.ensureToken(set, 'spacing', 'spacing.md', '16');
-
-// 一括登録も可能
-await storage.ensureTokenBatch(set, [
-  { type: 'color', name: 'color.success', value: '#22C55E' },
-  { type: 'spacing', name: 'spacing.lg', value: '24' }
-]);
-
-// トークン適用（文字列名を直接指定、null チェック・互換性チェック付き）
-await storage.applyTokenSafe(shape, 'color.primary', ['fill']);
-
-// 概観確認
-penpotUtils.tokenOverview();
-```
+`storage.ensureTokenSet` / `storage.ensureToken` / `storage.ensureTokenBatch` で冪等なトークン登録。
+コード例 → [mcp-api.md #トークン登録パターン](../mcp-api.md#トークン登録パターン)
 
 ### テーマ作成・テーマ切替
 
-```javascript
-const catalog = penpot.library.local.tokens;
-
-// セット作成（Shared → Dark → Light: カタログ順で後のセットが優先されるため、ベースを先に作成）
-const { set: sharedSet } = await storage.ensureTokenSet('Shared');
-const { set: darkSet } = await storage.ensureTokenSet('Dark');
-const { set: lightSet } = await storage.ensureTokenSet('Light');
-
-// テーマ非依存のトークンは Shared に
-await storage.ensureToken(sharedSet, 'spacing', 'spacing.md', '16');
-// 同名トークンを Dark/Light 両セットに定義（カタログ順で Shared より後 → 上書き可能）
-await storage.ensureToken(darkSet, 'color', 'color.bg.primary', '#1A1A2E');
-await storage.ensureToken(lightSet, 'color', 'color.bg.primary', '#FFFFFF');
-
-// テーマ作成（引数は2つの文字列）
-catalog.addTheme('Appearance', 'Dark');
-catalog.addTheme('Appearance', 'Light');
-const darkTheme = catalog.themes.find(t => t.name === 'Dark');
-const lightTheme = catalog.themes.find(t => t.name === 'Light');
-
-// テーマにセットを関連付け（addSet の順序は優先度に影響しない）
-darkTheme.addSet(sharedSet);
-darkTheme.addSet(darkSet);
-lightTheme.addSet(sharedSet);
-lightTheme.addSet(lightSet);
-
-// テーマ切替はセットの active で制御
-// ⚠ theme.toggleActive() は WebSocket 切断を起こすため使用禁止
-// ⚠ set.active は永続化されない（ページリロードで失われる）— エクスポート前の一時切替に使用
-darkSet.active = true; lightSet.active = false; sharedSet.active = true;  // Dark（セッション限定）
-// darkSet.active = false; lightSet.active = true; sharedSet.active = true; // Light（セッション限定）
-
-// ■ 永続的なテーマ切替（推奨）— Playwright UI 自動化経由でサーバーに保存
-await storage.switchThemePersistent(['Shared', 'Dark'], ['Light']);   // Dark テーマ
-// await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']); // Light テーマ
-```
-
-> **永続化の注意**: Plugin API の `set.active` と `theme.addSet()` はサーバーに永続化されない。
-> テーマ切替を永続化する場合は `storage.switchThemePersistent()` または `storage.toggleSetPersistent()` を使用すること。
-> 詳細は [mcp-api.md](../mcp-api.md) の「Plugin API 永続化制約」を参照。
+Shared（ベース）→ Dark/Light（テーマ固有）の順にセットを作成し、同名トークンでテーマ間の値を切り替える。
+コード例 → [mcp-api.md #テーマ構築フロー](../mcp-api.md#テーマ構築フローセット作成テーマ作成関連付け) / [#テーマ切替](../mcp-api.md#テーマ切替セットの-active-制御)
 
 ### スペーシングルール
 `storage.spacing` (xs:4 〜 3xl:64) をプロジェクト標準として定義。

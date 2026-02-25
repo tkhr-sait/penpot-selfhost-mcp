@@ -1,6 +1,7 @@
 // ============================================================
-// Penpot Token Sync Utilities
-// Read this file, then run via MCP execute_code.
+// Penpot Token Sync Utilities (init.d: 20)
+//
+// activate 時に自動実行。冪等（再呼び出しでも安全）。
 //
 // Provides: storage.exportTokensDTCG,
 //           storage.importTokensDTCG,
@@ -8,6 +9,9 @@
 //           storage.generateStyleDictionaryConfig
 // ============================================================
 
+if (!storage.__tokenSyncDone) {
+
+storage.__wrappers = storage.__wrappers || [];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // --- Export: Penpot → W3C DTCG JSON ---
@@ -136,13 +140,13 @@ storage.exportTokensDTCG = () => {
   }
 
   // Add $themes metadata
+  // テーマ→セット関連は ensureTheme のセッション内キャッシュ (__themeSetMap) から取得。
+  // キャッシュがない場合は正直に空配列を返す（docs/problems/theme-activeSets-null.md 参照）。
   if (themes.length > 0) {
     dtcg.$themes = themes.map(theme => ({
       name: theme.name,
       group: theme.group,
-      // ⚠ theme.activeSets は現在常に null を返す（Plugin API の制限）
-      // セット関連はエクスポートされない。インポート時にテーマ→セット再構築が必要
-      sets: (theme.activeSets || []).map(s => s.name)
+      sets: storage.__themeSetMap?.[theme.name] || []
     }));
   }
 
@@ -321,6 +325,23 @@ storage.importTokensDTCG = async (jsonString) => {
     allBatchItems, existingSets, existingTokensBySet, stats, 0
   );
 
+  // テーマ復元: $themes が存在し sets が空でない場合、ensureTheme で再構築
+  if (dtcg.$themes && Array.isArray(dtcg.$themes)) {
+    for (const themeDef of dtcg.$themes) {
+      if (!themeDef.sets || themeDef.sets.length === 0) continue;
+      const themeSets = themeDef.sets
+        .map(name => existingSets[name])
+        .filter(Boolean);
+      if (themeSets.length > 0) {
+        await storage.ensureTheme(
+          themeDef.group || 'Appearance',
+          themeDef.name,
+          themeSets
+        );
+      }
+    }
+  }
+
   // 全バッチ完了 → 進捗クリア
   storage._importProgress = null;
   return finalStats;
@@ -396,4 +417,12 @@ export default {
 `;
 };
 
-return 'Token sync utilities initialized: storage.exportTokensDTCG, storage.importTokensDTCG, storage.resumeImport, storage.generateStyleDictionaryConfig';
+storage.__wrappers.push(
+  { fn: 'storage.exportTokensDTCG()', replaces: null, reason: 'Penpot→W3C DTCG JSON エクスポート（同期）' },
+  { fn: 'await storage.importTokensDTCG(jsonString)', replaces: null, reason: 'DTCG JSON→Penpot インポート（バッチ+再開機能）' },
+  { fn: 'await storage.resumeImport()', replaces: null, reason: 'インポート中断後の再開' },
+  { fn: 'storage.generateStyleDictionaryConfig(opts)', replaces: null, reason: 'Style Dictionary 設定ファイル生成' },
+);
+
+storage.__tokenSyncDone = true;
+}

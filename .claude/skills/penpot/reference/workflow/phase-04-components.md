@@ -24,7 +24,7 @@
 
 ## MCP によるコンポーネント構築
 
-`penpot-init.js` 初期化後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）に従い:
+`activate` 実行後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）に従い:
 
 1. `storage.createAndOpenPage('Components')` でコンポーネント展示ページ作成
 2. `storage.applyTokenSafe(shape, 'token-name', ['fill'])` でトークンカラー適用
@@ -33,7 +33,7 @@
 5. `penpot.library.local.createComponent(shapes)` でコンポーネント化
 6. `component.transformInVariant()` でバリアント化
 7. `variant.addVariant()` / `variant.addProperty()` でバリエーション追加
-8. `validate-design.js` でフォント・テキスト検証
+8. `return storage.validateDesign()` でフォント・テキスト検証
 9. `mcp__penpot-official__export_shape` で各バリアントを確認
 
 ## 成果物

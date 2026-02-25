@@ -23,7 +23,7 @@
 
 ## MCP によるワイヤーフレーム作成
 
-`penpot-init.js` 初期化後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）を使用:
+`activate` 実行後、「デザイン作成」ワークフロー（理解→設計→実装→レビュー）を使用:
 
 - `storage.createAndOpenPage('Wireframes')` でワイヤーフレーム用ページ作成
 - Board + Flex/Grid レイアウトで構造定義

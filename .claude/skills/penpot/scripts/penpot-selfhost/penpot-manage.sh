@@ -322,6 +322,13 @@ _setup_mcp_workspace() {
 cmd_down() {
   echo "Stopping Penpot..."
   dc down
+  # mcp-proxy コンテナのクリーンアップ（docker compose run で作成されたもの）
+  local proxy_ids
+  proxy_ids=$(docker ps -q --filter "ancestor=mcp-proxy" 2>/dev/null)
+  if [ -n "$proxy_ids" ]; then
+    echo "Stopping mcp-proxy containers..."
+    echo "$proxy_ids" | xargs docker stop >/dev/null 2>&1
+  fi
 }
 
 cmd_status() {

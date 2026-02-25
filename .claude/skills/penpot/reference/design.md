@@ -36,7 +36,7 @@ Penpot MCP でのUI/UXデザイン作成に関するワークフロー、デザ�
 ### Phase 3: 実装
 
 Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作成する。
-[penpot-init.js](../scripts/mcp-snippets/penpot-init.js) を Read → `mcp__penpot-official__execute_code` で初期化し、
+`mcp__penpot-official__activate` で storage ラッパーが自動初期化される。
 下記の「実装ルール」とデザイン原則に従って作成する。
 
 **大規模デザインの実装戦略:**
@@ -89,7 +89,6 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ### フォント
 - **`fontFamily: "sourcesanspro"` のみ**（セルフホスト環境の唯一のビルトインフォント）
-- テキスト作成は `storage.createText()` を使用すること（fontFamily 自動設定）。`penpot.createText()` 直接使用禁止
 
 ### スペーシング
 - 4px/8px グリッドシステム（4, 8, 12, 16, 24, 32, 48, 64）
@@ -101,11 +100,8 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 - Flex/Grid レイアウトを積極活用
 
 ### ページ管理
-- `storage.createAndOpenPage(name)` 必須（空の Page 1 自動再利用、切替忘れ防止）
-- 最低1ページ制約（最後のページは削除不可）
-- ページ切替: `penpot.openPage(page, false)` — 第2引数 `false` 必須
-- 複数ページ作業時は `storage.assertCurrentPage(page)` でシェイプ作成前に検証
 - プロトタイプ: インタラクションは同一ページ内のみ（異なるページ間は動作しない）
+- API 詳細（createAndOpenPage, openPage, assertCurrentPage 等）は [mcp-api.md](mcp-api.md) のページ操作を参照
 
 ### ライブラリ管理
 - カラー・タイポグラフィはネイティブ Design Tokens で管理（ライブラリファイル不要）
@@ -118,38 +114,52 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ## テーマ切替戦略
 
-ダーク/ライトテーマの切替は **トークンセットの active 制御** で実現する。同名トークンを複数セットに定義し、セットの有効/無効を切り替えることで、同一コンポーネントのまま見た目を変更できる。
+ダーク/ライトテーマの切替は **トークンセットの active 制御** で実現する。
 
-- Light 用に別コンポーネントを手作りする必要はない
-- 同じコンポーネントにトークンを適用し、セット切替で対応
+### 原則: ボードは 1 つ
+- **ボードを複製して Light 版/Dark 版を作らない** — 同一ボードでトークンセットの ON/OFF を切り替える
+- Light 用に別コンポーネントやボードを手作りする必要はない
+- 同じシェイプにセマンティックトークンを適用し、セット切替で外観が自動的に変わる
+
+### アンチパターン
+- Light 用ボード + Dark 用ボードを別々に作成する
+- テーマごとに色をハードコードした複数のコンポーネントを作る
+- export_shape でテーマ確認するために別ボードを用意する
+
+### 正しいパターン
+1. セマンティックトークン（surface-primary, text-heading 等）を Light/Dark セットに同名で定義
+2. 全シェイプにトークンを適用（ハードコードの色は使わない）
+3. `switchThemePersistent` でセットを切り替え → 同一ボードの見た目が変わる
+4. `export_shape` で確認 → セット切替 → 再度 `export_shape` で別テーマ確認
+
+### その他
 - テーマ非依存のトークン（spacing, borderRadius 等）は Shared セットにまとめる
-- **永続化の制約**: Plugin API の `set.active` はサーバーに永続化されない（ページリロードで失われる）。
-  永続的なテーマ切替には `storage.switchThemePersistent()` を使用する:
-  ```javascript
-  await storage.switchThemePersistent(['Shared', 'Dark'], ['Light']);
-  ```
-- 詳細な API 制約・コード例は [mcp-api.md](mcp-api.md) の「テーマ管理」「テーマ切替」セクションを参照
+- **永続化の制約**: Plugin API の `set.active` はリロードで失われる。詳細は [mcp-api.md](mcp-api.md) のテーマ管理・テーマ切替セクションを参照
 
 ## セマンティックカラートークン
 
-ネイティブデザイントークンとして定義する14色。`token-utils.js` 初期化後、`storage.applyTokenSafe()` で安全に適用する。
+ネイティブデザイントークンとして定義する14色。`storage.applyTokenSafe()` で安全に適用する。
 
-| トークン | 用途 |
-|---------|------|
-| surface-primary | ページ背景 |
-| surface-card | カード・パネル背景 |
-| surface-secondary | セカンダリ背景・区切り |
-| surface-info | 情報パネル背景 |
-| text-heading | 見出しテキスト |
-| text-primary | 本文テキスト |
-| text-secondary | 補助テキスト |
-| text-on-accent | アクセント背景上のテキスト |
-| accent-blue | プライマリアクセント・CTA |
-| accent-green | 成功・ポジティブ |
-| accent-error | エラー・警告 |
-| accent-error-light | エラー背景 |
-| border-primary | 主要ボーダー |
-| border-light | 軽いボーダー・区切り線 |
+| トークン | 用途 | Light | Dark |
+|---------|------|-------|------|
+| surface-primary | ページ背景 | `#FFFFFF` | `#1A1A2E` |
+| surface-card | カード・パネル背景 | `#F8F9FA` | `#2D2D44` |
+| surface-secondary | セカンダリ背景・区切り | `#E9ECEF` | `#16213E` |
+| surface-info | 情報パネル背景 | `#E8F4FD` | `#1A3A5C` |
+| text-heading | 見出しテキスト | `#1A1A2E` | `#F8F9FA` |
+| text-primary | 本文テキスト | `#2D2D44` | `#E0E0E0` |
+| text-secondary | 補助テキスト | `#6C757D` | `#9E9E9E` |
+| text-on-accent | アクセント背景上のテキスト | `#FFFFFF` | `#FFFFFF` |
+| accent-blue | プライマリアクセント・CTA | `#4A90D9` | `#6DB3F8` |
+| accent-green | 成功・ポジティブ | `#28A745` | `#4CAF50` |
+| accent-error | エラー・警告 | `#DC3545` | `#EF5350` |
+| accent-error-light | エラー背景 | `#F8D7DA` | `#4A1C1C` |
+| border-primary | 主要ボーダー | `#DEE2E6` | `#3D3D5C` |
+| border-light | 軽いボーダー・区切り線 | `#E9ECEF` | `#2D2D44` |
+
+> Light/Dark 値は Material Design 3 + WCAG AA 準拠を基本に選定。プロジェクトに合わせて調整可。
+>
+> コードからは `storage.SEMANTIC_TOKEN_DEFAULTS` で参照可能。一括登録は `storage.ensureSemanticTokens()` を使用。
 
 ### トークン取得・適用
 

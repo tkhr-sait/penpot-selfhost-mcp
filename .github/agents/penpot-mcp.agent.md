@@ -25,30 +25,32 @@ Penpot MCP 操作の実行エージェント（GitHub Copilot Agent Mode 用）�
 ## 初期化
 
 ### 必須（毎回）
-1. `activate` を呼び出してセッション開始（penpot-init.js 自動実行）
+1. `activate` を呼び出してセッション開始（storage ラッパー自動初期化（REST API・トークン・同期・コアヘルパー含む））
 2. `.claude/skills/penpot/reference/mcp-api.md` を Read（API制約の確認）
 
 ### 状況に応じて追加
-- トークン操作時: `.claude/skills/penpot/scripts/mcp-snippets/token-utils.js` を Read → execute_code で実行
-- REST API 操作時: `.claude/skills/penpot/scripts/mcp-snippets/penpot-rest-api.js` を Read → execute_code で実行
+- 画面構築時: `.claude/skills/penpot/reference/cookbook/` を Read（実行パターン集）
 
 ### 初期化スキップ条件
 呼び出し元から「storage 初期化済み」と指示された場合、簡易確認のみ行う:
 ```javascript
-return { hasCreateText: !!storage.createText, hasApplyToken: !!storage.applyTokenSafe, initDone: !!storage.__initDone };
+return { ready: typeof storage.createText === 'function' && !!storage.__coreDone };
 ```
-全て true なら初期化スキップ可。ただし `context` が必要な場合は activate を実行すること。
+`ready: true` なら初期化スキップ可。ただし `context` が必要な場合は activate を実行すること。
 
 ## 実行パターン
 
 ### 画面構築の基本フロー
-1回の execute_code で**画面単位**（ボード + 全子要素 + レイアウト + スタイル）をまとめて構築する。
-1操作1呼び出しの細切れ実行は避けること。
+セクション単位で分割して構築する。複雑画面は骨格→中身→トークン適用と分ける。
+1操作1呼び出しの細切れ実行は避けつつ、巨大スクリプトも WebSocket 切断リスクがあるため適度に分割。
 
-**理想的な呼び出し回数の目安:**
-- 単一画面: 1〜2回
-- 複数画面プロトタイプ: 画面数 + 1〜2回（ヘルパー登録 + インタラクション設定）
-- トークン定義: 1回（バッチ登録）
+**呼び出し回数の現実的な目安（WebSocket 切断リトライ含まず）:**
+- 単一シンプル画面: 1〜3回
+- 単一複雑画面（繰り返し要素あり）: 3〜5回
+- 複数画面プロトタイプ（N画面+トークン+テーマ+インタラクション）: N×3 + 3〜5回
+- トークン定義のみ: 1〜2回
+
+※ WebSocket 切断リトライで +20〜50% を見込むこと
 
 ### ヘルパー関数パターン
 繰り返すUIパターン（カード、ボタン、リスト項目等）は最初に storage にヘルパー関数として登録し再利用:
@@ -57,6 +59,8 @@ storage.createButton = async (label, variant) => { ... };
 storage.createCard = async (title, body) => { ... };
 ```
 **ヘルパーは必ず async にする**（後述の layoutChild 問題のため）。
+
+**ヘルパー消失対策**: WebSocket 切断→自動復帰時、storage のカスタムヘルパーは消失する（ビルトインラッパーは activate 再実行で復元される）。冪等ガード（`if (!storage.__myHelpers) { ... storage.__myHelpers = true; }`）付きでヘルパー登録を独立した execute_code にまとめ、切断後は再実行すること。
 
 ## API 制約・デザイン原則
 
@@ -73,3 +77,16 @@ storage.createCard = async (title, body) => { ... };
 - **適用**: トークン名、スタイル
 - **インタラクション**: トリガー → アクション → ターゲット
 - **エラー**: 内容と対処
+
+## ファイル・ページ制約
+
+- **新しいプロジェクト/ファイルを作成しない**（明示的に指示された場合を除く）
+- activate の context.pages を確認し、同名ページが存在すれば再利用する
+  （createAndOpenPage が自動で再利用するが、呼び出し前に context で確認すること）
+- 既存ボードがある場合は修正/追加する方針で、白紙から作り直さない
+- デフォルトのトークンセットは `storage.ensureSemanticTokens()` で作成
+  （metrics.tokenSets > 0 の場合は既存トークンを使用し、呼び出さない）
+
+## API 制約（追加）
+
+**テーマ制約**: Light/Dark 用に別ボードを作成しない。同一ボードにセマンティックトークンを適用し、セット切替で対応する。テーマ確認は export_shape → switchThemePersistent → 再 export_shape で行う。

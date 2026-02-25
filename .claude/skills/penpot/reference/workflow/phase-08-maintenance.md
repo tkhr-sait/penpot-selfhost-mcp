@@ -22,10 +22,10 @@
 
 ## MCP による自動監査・メンテナンス
 
-`penpot-init.js` 初期化後:
+`activate` 実行後:
 
-### validate-design.js で定期チェック
-フォント・テキストサイズ・growType の違反を自動検出。
+### storage.validateDesign() で定期チェック
+フォント・テキストサイズ・growType の違反を自動検出。`return storage.validateDesign()` で実行。
 
 ### 一貫性チェック（拡張）
 - `penpotUtils.findTokenByName()` （または `storage.findTokenOrNull()` ）/ `penpotUtils.tokenOverview()` でネイティブトークンと実使用色を突合 → 未登録カラー検出
