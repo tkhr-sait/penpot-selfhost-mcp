@@ -229,6 +229,8 @@ await storage.ensureSemanticTokens();
 ### インタラクション
 - 同一ページ内のボード間のみ有効（異なるページ間は動作しない）
 - `shape.addInteraction(trigger, action, delay?)` で追加
+  - trigger: 文字列（`'click'`, `'mouse-enter'`, `'mouse-leave'`, `'after-delay'` 等）
+  - action: オブジェクト（`{ type: 'navigate-to', destination: targetBoard }` 等）
 - **動作する Action**:
   - NavigateTo: `{ type: 'navigate-to', destination: targetBoard }`
   - CloseOverlay: `{ type: 'close-overlay' }`

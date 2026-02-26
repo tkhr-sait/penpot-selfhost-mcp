@@ -166,17 +166,17 @@ const cart = penpotUtils.findShapes(s => s.name === 'Cart', root)[0];
 // Home → Product Detail（カードクリック）
 const cards = penpotUtils.findShapes(s => s.name?.startsWith('Card-'), home);
 for (const card of cards) {
-  card.addInteraction({ type: 'click' }, { type: 'navigate-to', destination: detail });
+  card.addInteraction('click', { type: 'navigate-to', destination: detail });
 }
 
 // Product Detail → Cart（カートボタンクリック）
 const cartBtn = penpotUtils.findShapes(s => s.name === 'CartButton', detail)[0];
-if (cartBtn) cartBtn.addInteraction({ type: 'click' }, { type: 'navigate-to', destination: cart });
+if (cartBtn) cartBtn.addInteraction('click', { type: 'navigate-to', destination: cart });
 
 // 各画面の Logo → Home
 for (const board of [detail, cart]) {
   const logo = penpotUtils.findShapes(s => s.name === 'Logo', board)[0];
-  if (logo) logo.addInteraction({ type: 'click' }, { type: 'navigate-to', destination: home });
+  if (logo) logo.addInteraction('click', { type: 'navigate-to', destination: home });
 }
 
 return { interactions: 'set' };

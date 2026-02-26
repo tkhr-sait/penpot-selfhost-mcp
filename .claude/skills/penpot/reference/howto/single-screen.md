@@ -154,16 +154,10 @@ detailBoard.name = 'Card Detail';
 detailBoard.resize(1440, 900);
 
 // カードにクリック→遷移インタラクションを設定
-card.addInteraction(
-  { type: 'click' },
-  { type: 'navigate-to', destination: detailBoard }
-);
+card.addInteraction('click', { type: 'navigate-to', destination: detailBoard });
 
 // 戻るボタン
-backButton.addInteraction(
-  { type: 'click' },
-  { type: 'previous-screen' }
-);
+backButton.addInteraction('click', { type: 'previous-screen' });
 return { interaction: 'navigate-to', target: detailBoard.id };
 ```
 
