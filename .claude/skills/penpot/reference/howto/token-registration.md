@@ -1,7 +1,7 @@
 # Recipe: トークン一括登録
 
 セマンティックトークンを冪等に一括登録し、シェイプに適用する。
-API 制約 → [mcp-api.md #トークン](../mcp-api.md#トークン)
+API 制約 → [mcp-api.md #トークン](../core/mcp-api.md#トークン)
 
 ## コード例
 
@@ -29,5 +29,5 @@ return penpotUtils.tokenOverview();
 ## 注意点
 
 - 全 `ensure*` 関数は冪等 — 同じスクリプトを2回実行しても安全
-- トークンタイプ→適用プロパティ対応 → [mcp-api.md #トークン](../mcp-api.md#トークン)
+- トークンタイプ→適用プロパティ対応 → [mcp-api.md #トークン](../core/mcp-api.md#トークン)
 - 大量登録は `ensureTokenBatch` が内部で 10件バッチ + 200ms sleep を行うため明示的な sleep は不要

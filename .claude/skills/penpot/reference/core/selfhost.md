@@ -177,7 +177,7 @@ mcp-connect が使えない場合の手動手順（**MCP専用ユーザーでロ
 
 ## 環境変数一覧
 
-環境変数テンプレート: [scripts/penpot-selfhost/.env.example](../scripts/penpot-selfhost/.env.example)
+環境変数テンプレート: [scripts/penpot-selfhost/.env.example](../../scripts/penpot-selfhost/.env.example)
 
 ### Core
 | 変数 | デフォルト | 説明 |

@@ -155,12 +155,13 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 
 #### デフォルトセマンティックトークン
 
-新規プロジェクトでデフォルトの14色+スペーシング+角丸トークンを一括登録:
+14色+spacing+borderRadius の定義値は [design.md のセマンティックカラートークン](design.md#セマンティックカラートークン) を参照。
+
+一括登録:
 ```javascript
 await storage.ensureSemanticTokens();
-// カスタマイズ: await storage.ensureSemanticTokens({ overrides: { 'accent-blue': { light: '#007AFF', dark: '#64B5F6' } } })
-// 既存トークンがあれば自動スキップ（force: true で上書き）
-// Typography 追加: await storage.ensureSemanticTokens({ includeTypography: true })
+// カスタマイズ: await storage.ensureSemanticTokens({ overrides: { ... } })
+// Typography: await storage.ensureSemanticTokens({ includeTypography: true })
 ```
 トークン一覧は `storage.SEMANTIC_TOKEN_DEFAULTS` で参照可能。
 
@@ -168,13 +169,13 @@ await storage.ensureSemanticTokens();
 
 `storage.ensureTokenSet` → `storage.ensureToken` / `storage.ensureTokenBatch` → `storage.applyTokenSafe` の順で冪等登録・適用。`penpotUtils.tokenOverview()` で確認。
 
-コード例 → [cookbook: トークン一括登録](cookbook/token-registration.md)
+コード例 → [howto: トークン一括登録](../howto/token-registration.md)
 
 ### テーマ管理
 - `catalog.addTheme('group', 'name')` でテーマ作成（引数は2つの文字列、オブジェクトではない）
 - `theme.addSet(setObj)` でテーマにセットを関連付け
 - **⚠ `theme.toggleActive()` は WebSocket 切断を引き起こす** — 使用禁止。テーマ切替はセット単位で `set.active = true/false` を使う
-- **⚠ `theme.activeSets` は常に null** — Plugin API でのテーマ→セット関連の直接読み取りは不可（[詳細](../../../docs/problems/theme-activeSets-null.md)）。`ensureTheme` のセッション内キャッシュ (`__themeSetMap`) が唯一の有効データソース
+- **⚠ `theme.activeSets` は常に null** — Plugin API でのテーマ→セット関連の直接読み取りは不可。`ensureTheme` のセッション内キャッシュ (`__themeSetMap`) が唯一の有効データソース
 
 #### Plugin API 永続化制約
 
@@ -195,11 +196,11 @@ await storage.ensureSemanticTokens();
 3. `storage.ensureTheme(group, name, sets[])` で冪等にテーマ作成+セット関連付け
 4. `storage.switchThemePersistent()` で永続化
 
-コード例 → [cookbook: テーマ構築](cookbook/theme-setup.md)
+コード例 → [howto: テーマ構築](../howto/theme-setup.md)
 
 ### テーマ切替（セットの active 制御）
 
-> **⚠ Light/Dark 用に別々のボードを作成しない。** 同一ボードでトークンセットの ON/OFF を切り替えることでテーマを変更する。ボード複製はメンテナンスコスト倍増の原因。
+> テーマ切替の原則・アンチパターンは [design.md のテーマ切替戦略](design.md#テーマ切替戦略) を参照。
 
 - **セット作成順序に注意**: Shared（ベース）セットを最初に作成し、テーマ固有セット（Dark/Light）を後に作成すること。
   `catalog.sets` の順序でトークン優先度が決まり、後のセットが優先される。
@@ -303,7 +304,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 - `createFile()` / `setFileShared()` / `linkLibrary()` / `unlinkLibrary()`
 
 `storage.createFile()` で isShared 付きファイル作成、`storage.linkLibrary()` で接続。
-コード例 → [cookbook: ライブラリ管理](cookbook/library-management.md)
+コード例 → [howto: ライブラリ管理](../howto/library-management.md)
 
 - `getCurrentProjectId()`: 接続中ファイルと同じプロジェクトにライブラリ作成
 - `getTeamId()`: Shared Workspace チームを優先

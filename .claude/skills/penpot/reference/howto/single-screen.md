@@ -1,7 +1,7 @@
 # MCP API Cookbook
 
 Kanban アプリ構築を題材にした実行パターン集。各ステップは「やりたいこと → コード例 → 注意点」のフォーマット。
-API 制約・メソッド一覧は [mcp-api.md](../mcp-api.md) を参照。
+API 制約・メソッド一覧は [mcp-api.md](../core/mcp-api.md) を参照。
 
 ---
 
@@ -51,7 +51,7 @@ return { pageId: page.id, boardId: board.id };
 **注意点**:
 - `width`/`height` は読取専用 → サイズ設定は `resize(w, h)`
 - `createAndOpenPage` は `await` 必須。空の Page 1 があればリネームして再利用する
-- ページ操作メソッド一覧 → [mcp-api.md #ページ操作](../mcp-api.md#ページ操作)
+- ページ操作メソッド一覧 → [mcp-api.md #ページ操作](../core/mcp-api.md#ページ操作)
 
 ---
 
@@ -139,7 +139,7 @@ return { applied: true };
 **注意点**:
 - `await` 必須（内部で 100ms sleep 実行）
 - 未登録トークン名はエラー。`tokenOverview()` で事前確認
-- トークンタイプ→プロパティ対応 → [mcp-api.md #トークン](../mcp-api.md#トークン)
+- トークンタイプ→プロパティ対応 → [mcp-api.md #トークン](../core/mcp-api.md#トークン)
 
 ---
 
@@ -217,4 +217,4 @@ return comments.filter(c => !c.resolved);
 
 **注意点**:
 - `export_shape` は execute_code ではなく MCP ツールとして直接呼び出す
-- コメント機能の詳細 → [comments.md](../comments.md)
+- コメント機能の詳細 → [comments.md](../core/comments.md)

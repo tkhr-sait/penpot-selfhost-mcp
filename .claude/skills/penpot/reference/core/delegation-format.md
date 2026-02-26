@@ -47,4 +47,4 @@
 | Home | ヒーロータイトル | New Arrivals | 48 / bold |
 | Home | サブタイトル | 最新コレクション | 18 / regular |
 
-タイポグラフィスケールは [design.md](../design.md) を参照。
+タイポグラフィスケールは [design.md](design.md) を参照。

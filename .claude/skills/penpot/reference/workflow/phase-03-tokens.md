@@ -3,6 +3,8 @@
 ## 目的
 デザインシステムの最小単位となるトークンをPenpotのネイティブデザイントークン機能で定義・管理する。
 
+> **実行境界**: このフェーズの execute_code 操作は penpot-mcp サブエージェント内で実行すること。
+
 ## Penpotでの操作
 
 ### デザイントークン（ネイティブ）
@@ -22,17 +24,17 @@
 ### トークンの登録（ネイティブ API）
 
 `storage.ensureTokenSet` / `storage.ensureToken` / `storage.ensureTokenBatch` で冪等なトークン登録。
-コード例 → [mcp-api.md #トークン登録パターン](../mcp-api.md#トークン登録パターン)
+コード例 → [mcp-api.md #トークン登録パターン](../core/mcp-api.md#トークン登録パターン)
 
 ### テーマ作成・テーマ切替
 
 Shared（ベース）→ Dark/Light（テーマ固有）の順にセットを作成し、同名トークンでテーマ間の値を切り替える。
-コード例 → [mcp-api.md #テーマ構築フロー](../mcp-api.md#テーマ構築フローセット作成テーマ作成関連付け) / [#テーマ切替](../mcp-api.md#テーマ切替セットの-active-制御)
+コード例 → [mcp-api.md #テーマ構築フロー](../core/mcp-api.md#テーマ構築フローセット作成テーマ作成関連付け) / [#テーマ切替](../core/mcp-api.md#テーマ切替セットの-active-制御)
 
 ### スペーシングルール
 `storage.spacing` (xs:4 〜 3xl:64) をプロジェクト標準として定義。
 
-定義するトークンの具体値は [design.md](../design.md) を参照。
+定義するトークンの具体値は [design.md](../core/design.md) を参照。
 
 ## 成果物
 - デザイントークンセット（Penpot Native Design Tokens）

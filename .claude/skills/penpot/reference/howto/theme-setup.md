@@ -1,7 +1,7 @@
 # Recipe: テーマ構築
 
 Dark/Light テーマを構築し、永続的に切り替えられるようにする。
-API 制約 → [mcp-api.md #テーマ管理](../mcp-api.md#テーマ管理)
+API 制約 → [mcp-api.md #テーマ管理](../core/mcp-api.md#テーマ管理)
 
 ## 簡易版（推奨）
 
@@ -54,4 +54,4 @@ return { darkTheme: darkTheme.name, lightTheme: lightTheme.name };
 
 - `ensureTheme` の `addSet` はセッション限定 — 永続化は `switchThemePersistent` で行う
 - セット作成順序が重要: Shared を先に作成し、テーマ固有セットを後に（カタログ順で後が優先）
-- テーマ切替パターン → [mcp-api.md #テーマ切替](../mcp-api.md#テーマ切替セットの-active-制御)
+- テーマ切替パターン → [mcp-api.md #テーマ切替](../core/mcp-api.md#テーマ切替セットの-active-制御)

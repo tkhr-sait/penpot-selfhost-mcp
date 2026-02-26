@@ -33,17 +33,10 @@ Penpot MCP 操作の実行エージェント（Claude Code 用）。
 
 ### 必須（毎回）
 1. `mcp__penpot-official__activate` を呼び出してセッション開始（storage ラッパー自動初期化（REST API・トークン・同期・コアヘルパー含む））
-2. `.claude/skills/penpot/reference/mcp-api.md` を Read（API制約の確認）
+2. `.claude/skills/penpot/reference/core/mcp-api.md` を Read（API制約の確認）
 
 ### 状況に応じて追加
-- 画面構築時: `.claude/skills/penpot/reference/cookbook/` を Read（実行パターン集）
-
-### 初期化スキップ条件
-呼び出し元から「storage 初期化済み」と指示された場合、簡易確認のみ行う:
-```javascript
-return { ready: typeof storage.createText === 'function' && !!storage.__coreDone };
-```
-`ready: true` なら初期化スキップ可。ただし `context` が必要な場合は activate を実行すること。
+- 画面構築時: `.claude/skills/penpot/reference/howto/` を Read（実行パターン集）
 
 ## 実行パターン
 
@@ -69,11 +62,26 @@ storage.createCard = async (title, body) => { ... };
 
 **ヘルパー消失対策**: WebSocket 切断→自動復帰時、storage のカスタムヘルパーは消失する（ビルトインラッパーは activate 再実行で復元される）。冪等ガード（`if (!storage.__myHelpers) { ... storage.__myHelpers = true; }`）付きでヘルパー登録を独立した execute_code にまとめ、切断後は再実行すること。
 
+### 自己レビュー（レスポンス前に必ず実施）
+実装完了後、親AIに返す前に以下を実行:
+1. `return storage.validateDesign()` — 制約違反の検出
+2. `export_shape`（主要ボード, format: png）— 視覚的な自己確認
+3. 違反・異常があれば修正してから返却
+
+### レビューモード
+親AIからレビュー委譲を受けた場合（構築指示がなく、要件仕様のみ提供された場合）:
+1. `activate` → `getPageContext()` + `tokenOverview()` で現状把握
+2. `validateDesign()` で技術検証
+3. `export_shape` で主要ボードを視覚確認
+4. 要件仕様と現状の差分を構造的に報告
+
+**重要**: レビューモードではデザインの変更・修正を行わない。問題点の報告のみ。
+
 ## API 制約・デザイン原則
 
 **必ず以下を Read してから操作を開始すること:**
-- `.claude/skills/penpot/reference/mcp-api.md` — Plugin API 実践的制約（**storage ラッパー優先ルール**、layoutChild, Flex順序, トークン, インタラクション等）
-- `.claude/skills/penpot/reference/design.md` — スペーシング規約, カラートークン, タイポグラフィスケール, 実装ルール
+- `.claude/skills/penpot/reference/core/mcp-api.md` — Plugin API 実践的制約（**storage ラッパー優先ルール**、layoutChild, Flex順序, トークン, インタラクション等）
+- `.claude/skills/penpot/reference/core/design.md` — スペーシング規約, カラートークン, タイポグラフィスケール, 実装ルール
 
 **重要**: テキスト作成・ページ作成・ライブラリ接続は storage ラッパーを使用すること（activate レスポンスの `wrappers` を参照）。`context` でページ一覧・トークン状態を、ページ選択後は `storage.getPageContext()` でボード一覧を確認できる。penpot ネイティブメソッドの直接使用はバグ回避策を無効化する。
 
@@ -83,6 +91,7 @@ storage.createCard = async (title, body) => { ... };
 - **作成**: ページ名、ボードの ID/名前、主要シェイプ
 - **適用**: トークン名、スタイル
 - **インタラクション**: トリガー → アクション → ターゲット
+- **検証**: validateDesign 結果、export_shape 実施有無
 - **エラー**: 内容と対処
 
 ## ファイル・ページ制約

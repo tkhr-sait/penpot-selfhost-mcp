@@ -1,7 +1,7 @@
 # Recipe: テーマ付き複数画面プロトタイプ
 
 複数画面 + Light/Dark テーマ + インタラクションを含むプロトタイプの構築パターン。
-API 制約 → [mcp-api.md](../mcp-api.md) / テーマ → [theme-setup.md](theme-setup.md) / トークン → [token-registration.md](token-registration.md)
+API 制約 → [mcp-api.md](../core/mcp-api.md) / テーマ → [theme-setup.md](theme-setup.md) / トークン → [token-registration.md](token-registration.md)
 
 ## 概要
 

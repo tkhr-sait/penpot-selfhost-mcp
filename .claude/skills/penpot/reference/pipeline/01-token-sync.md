@@ -2,6 +2,8 @@
 
 Penpot のデザイントークンと リポジトリの JSON ファイルを双方向同期する。
 
+> **実行境界**: このファイルの execute_code 操作は penpot-mcp サブエージェント内で実行すること。
+
 ## Source of Truth
 
 **リポジトリ上のトークン JSON が正本**。Penpot はトークンの作成・編集 UI として使用し、export した JSON をリポジトリにコミットした時点でそれが正本となる。
@@ -53,12 +55,12 @@ tokens/
 
 ## 既知問題と対処
 
-トークン操作の API 制約（`addSet` 即時読取不可、`token.value` 読み取り専用、バッチ処理等）は [mcp-api.md](../mcp-api.md#トークン) を参照。
+トークン操作の API 制約（`addSet` 即時読取不可、`token.value` 読み取り専用、バッチ処理等）は [mcp-api.md](../core/mcp-api.md#トークン) を参照。
 
 ### インポートの再開手順
 
 `importTokensDTCG()` が途中で失敗した場合:
 1. `storage._importProgress` に進捗が自動保存されている
-2. `execute_code` を再呼び出しし `await storage.resumeImport()` で残りを処理
+2. サブエージェントが `execute_code` を再呼び出しし `await storage.resumeImport()` で残りを処理
 3. 再開時は既存トークンとの重複チェックで冪等性を保証
 4. **MCP 再接続は不要**（自動復帰する）

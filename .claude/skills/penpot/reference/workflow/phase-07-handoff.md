@@ -3,6 +3,8 @@
 ## 目的
 PenpotのオープンスタンダードでスムーズなDev Handoffを実現する。
 
+> **実行境界**: このフェーズの execute_code 操作は penpot-mcp サブエージェント内で実行すること。
+
 ## Penpotでの操作
 
 ### Inspect タブ
@@ -27,7 +29,7 @@ PenpotのオープンスタンダードでスムーズなDev Handoffを実現す
 ### CSS / HTML / SVG 生成
 
 `penpot.generateStyle()` でCSS、`penpot.generateMarkup()` でHTML/SVGを生成。
-コード例 → [mcp-api.md #コード生成（ハンドオフ）](../mcp-api.md#コード生成ハンドオフ)
+コード例 → [mcp-api.md #コード生成（ハンドオフ）](../core/mcp-api.md#コード生成ハンドオフ)
 
 ### トークン→コード変換
 `storage.findToken(name)` でトークン名から値を取得し（見つからなければ登録済みトークン名を含むエラー）、CSS カスタムプロパティや設計変数として出力。`penpotUtils.tokenOverview()` でトークン一覧を確認。

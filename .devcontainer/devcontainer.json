@@ -100,6 +100,14 @@
     "8080": {
       "onAutoForward": "ignore",
       "requireLocalPort": true
+    },
+    "1234": {
+      "onAutoForward": "ignore",
+      "requireLocalPort": true
+    },
+    "11434": {
+      "onAutoForward": "ignore",
+      "requireLocalPort": true
     }
   },
   // Fix named volume ownership for devuser

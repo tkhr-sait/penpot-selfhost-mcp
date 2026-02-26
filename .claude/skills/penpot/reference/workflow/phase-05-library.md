@@ -3,7 +3,9 @@
 ## 目的
 デザインシステムを分割ライブラリとして構成し、チーム全体で共有・同期する。
 
-詳細なライブラリ構成は [library-architecture.md](../library-architecture.md) を参照。
+> **実行境界**: このフェーズの execute_code 操作は penpot-mcp サブエージェント内で実行すること。
+
+詳細なライブラリ構成は [library-architecture.md](../core/library-architecture.md) を参照。
 
 ## Penpotでの操作
 
@@ -29,7 +31,7 @@
 ### 外部ライブラリの接続
 
 `penpot.library.availableLibraries()` で取得し `storage.connectLibrary(id)` で接続。
-詳細 → [mcp-api.md #storage ラッパー優先ルール](../mcp-api.md#storage-ラッパー優先ルール)
+詳細 → [mcp-api.md #storage ラッパー優先ルール](../core/mcp-api.md#storage-ラッパー優先ルール)
 
 ### 接続ライブラリのアセット利用
 `lib.components` から取得し、`instance()` で適用。
@@ -40,7 +42,7 @@ activate 時に自動初期化される REST API ユーティリティで、フ�
 
 1. **ライブラリファイル作成**: `storage.createFile()` で isShared 付きファイルを作成
 2. **ライブラリ接続**: `storage.linkLibrary()` で接続
-   → コード例は [mcp-api.md #ライブラリ管理](../mcp-api.md#ライブラリ管理) を参照
+   → コード例は [mcp-api.md #ライブラリ管理](../core/mcp-api.md#ライブラリ管理) を参照
 
 ### openFile 方式（コンポーネント登録等、Plugin API が必要な場合）
 

@@ -47,6 +47,10 @@ const INIT_SCRIPTS = NO_INIT ? [] : (() => {
   return s.split(",").map(x => x.trim()).filter(Boolean);
 })();
 
+const RETRY_ATTEMPTS = parseInt(getArg("retry-attempts", "") || env("MCP_RETRY_ATTEMPTS", "3"), 10);
+const RETRY_DELAY = parseInt(getArg("retry-delay", "") || env("MCP_RETRY_DELAY", "1000"), 10);
+const SCHEMA_FETCH_COOLDOWN = parseInt(getArg("schema-cooldown", "") || env("MCP_SCHEMA_COOLDOWN", "10000"), 10);
+
 const TOOLS_ARG = getArg("tools", "") || env("MCP_TOOLS", "*");
 const TOOL_WILDCARD = TOOLS_ARG === "*";
 const TOOL_LIST = TOOL_WILDCARD
@@ -89,7 +93,52 @@ async function connectUpstream() {
   if (!connected) {
     await client.connect(new SSEClientTransport(new URL(UPSTREAM_URL)));
   }
+  client.onclose = () => {
+    console.error("[mcp-proxy] upstream closed");
+    if (upstream === client) { upstream = null; initDone = false; }
+  };
+  client.onerror = (err) => {
+    console.error("[mcp-proxy] upstream error:", err?.message ?? err);
+  };
   return client;
+}
+
+// --- Connect with retry (exponential backoff) ---
+async function connectWithRetry(attempts = RETRY_ATTEMPTS, baseDelay = RETRY_DELAY) {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await connectUpstream();
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) {
+        const delay = baseDelay * 2 ** i;
+        console.error(`[mcp-proxy] connect attempt ${i + 1}/${attempts} failed, retry in ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+// --- Reconnect lock (prevent concurrent reconnection) ---
+let reconnectLock = null;
+
+async function reconnectOnce(useRetry = false) {
+  if (reconnectLock) return reconnectLock;
+  reconnectLock = (async () => {
+    try {
+      upstream = useRetry ? await connectWithRetry() : await connectUpstream();
+      if (!upstreamToolsCache) await cacheUpstreamTools();
+      await autoInit(true);
+    } catch (e) {
+      upstream = null;
+      throw e;
+    } finally {
+      reconnectLock = null;
+    }
+  })();
+  return reconnectLock;
 }
 
 // --- Auto-init (re-run on reconnect, returns result for activate response) ---
@@ -148,7 +197,7 @@ const server = new Server(
 
 // --- Upstream tools schema cache ---
 let upstreamToolsCache = null;
-let schemaFetchAttempted = false;
+let schemaFetchLastAttempt = 0;
 
 async function cacheUpstreamTools() {
   const result = await upstream.listTools();
@@ -160,8 +209,10 @@ async function cacheUpstreamTools() {
 
 // Eagerly fetch upstream schemas (best-effort, no gate unlock)
 async function ensureSchemaCache() {
-  if (upstreamToolsCache || schemaFetchAttempted) return;
-  schemaFetchAttempted = true;
+  if (upstreamToolsCache) return;
+  const now = Date.now();
+  if (now - schemaFetchLastAttempt < SCHEMA_FETCH_COOLDOWN) return;
+  schemaFetchLastAttempt = now;
   try {
     const client = await connectUpstream();
     upstream = client;
@@ -258,7 +309,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     try {
       // Reuse existing upstream connection from ensureSchemaCache if available
       if (!upstream) {
-        upstream = await connectUpstream();
+        upstream = await connectWithRetry();
       }
       if (!upstreamToolsCache) {
         await cacheUpstreamTools();
@@ -281,9 +332,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           {
             type: "text",
             text:
-              `上流 MCP に接続できません: ${e.message}\n` +
-              `URL: ${UPSTREAM_URL}\n` +
-              `上流サービスが起動しているか確認してください。`,
+              `上流 MCP への接続に失敗しました。\n` +
+              `エラー: ${e.message}\n` +
+              `URL: ${UPSTREAM_URL}\n\n` +
+              `activate を再度呼び出して再接続してください。` +
+              `解決しない場合は upstream URL やネットワーク設定を確認してください。`,
           },
         ],
         isError: true,
@@ -294,7 +347,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   // --- Transparent mode: auto-connect on first call ---
   if (!GATE_ENABLED && !upstream) {
     try {
-      upstream = await connectUpstream();
+      upstream = await connectWithRetry();
       await cacheUpstreamTools();
       await autoInit(false);
       unlocked = true;
@@ -304,8 +357,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           {
             type: "text",
             text:
-              `上流 MCP に接続できません: ${e.message}\n` +
-              `URL: ${UPSTREAM_URL}`,
+              `上流 MCP への接続に失敗しました。\n` +
+              `エラー: ${e.message}\n` +
+              `URL: ${UPSTREAM_URL}\n\n` +
+              `上流サービスの起動状態と URL 設定を確認してください。`,
           },
         ],
         isError: true,
@@ -354,16 +409,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     initDone = false;
     if (stale) { try { await stale.close(); } catch {} }
 
-    // Transparent mode: try auto-reconnect once
-    if (!GATE_ENABLED) {
-      try {
-        upstream = await connectUpstream();
-        await cacheUpstreamTools();
-        await autoInit(false);
-        return await upstream.callTool({ name, arguments: args });
-      } catch {
-        upstream = null;
-      }
+    // Gate mode: fast-fail (1回) → AI が activate で再接続判断
+    // Transparent mode: サーバ側リトライ
+    try {
+      await reconnectOnce(!GATE_ENABLED);
+      return await upstream.callTool({ name, arguments: args });
+    } catch (reconnectErr) {
+      upstream = null;
     }
 
     return {
@@ -371,8 +423,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         {
           type: "text",
           text: GATE_ENABLED
-            ? "上流 MCP が切断されました。\nactivate を呼び出して再接続してください。"
-            : "上流 MCP が切断され、自動再接続にも失敗しました。\n上流サービスの状態を確認してください。",
+            ? `上流 MCP が切断されました。\n` +
+              `エラー: ${e.message}\n\n` +
+              `activate を呼び出して再接続してください。` +
+              `解決しない場合は上流サービスの状態を確認してください。`
+            : `上流 MCP が切断され、自動再接続にも失敗しました。\n` +
+              `エラー: ${e.message}\n\n` +
+              `上流サービスの状態と URL 設定を確認してください。`,
         },
       ],
       isError: true,
@@ -398,6 +455,13 @@ process.on("SIGINT", shutdown);
 
 // stdin 切断でプロセス終了（Claude Code が MCP 再接続すると古い stdin が閉じられる）
 process.stdin.on("end", shutdown);
+
+process.on("uncaughtException", (e) => {
+  console.error("[mcp-proxy] uncaught exception:", e.message);
+});
+process.on("unhandledRejection", (e) => {
+  console.error("[mcp-proxy] unhandled rejection:", e);
+});
 
 // --- Start ---
 const transport = new StdioServerTransport();
