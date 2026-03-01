@@ -15,6 +15,8 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | penpot-mcp-copilot | MCP Plugin Server (Copilot用) | 4410, 4411, 4412 |
 | penpot-mcp-connect-claude | MCP Auto-Connect + Bridge Server (Claude Code用) | (internal: 3000) |
 | penpot-mcp-connect-copilot | MCP Auto-Connect + Bridge Server (Copilot用) | (internal: 3000) |
+| penpot-mcp-opencode | MCP Plugin Server (OpenCode用) | 4420, 4421, 4422 |
+| penpot-mcp-connect-opencode | MCP Auto-Connect + Bridge Server (OpenCode用) | (internal: 3000) |
 | penpot-storybook | Penpot Design System Storybook | 6006 |
 
 ### ポート構成
@@ -28,6 +30,9 @@ Docker Compose によるセルフホスト構成、ユーザー管理、MCP接�
 | 4410 | プラグイン静的ファイル配信 (Copilot) | `PENPOT_MCP_COPILOT_PLUGIN_PORT` |
 | 4411 | MCP HTTP/SSE エンドポイント (Copilot) | `PENPOT_MCP_COPILOT_HTTP_PORT` |
 | 4412 | WebSocket (Copilot) | `PENPOT_MCP_COPILOT_WS_PORT` |
+| 4420 | プラグイン静的ファイル配信 (OpenCode) | `PENPOT_MCP_OPENCODE_PLUGIN_PORT` |
+| 4421 | MCP HTTP/SSE エンドポイント (OpenCode) | `PENPOT_MCP_OPENCODE_HTTP_PORT` |
+| 4422 | WebSocket (OpenCode) | `PENPOT_MCP_OPENCODE_WS_PORT` |
 | 6006 | Penpot Design System Storybook | `PENPOT_STORYBOOK_PORT` |
 
 ### mcp-connect ブリッジサーバー
@@ -71,16 +76,17 @@ port 3000 はコンテナ内部のみ（ホスト非公開）。`storage.api()` 
 
 ## ユーザーアカウント構成
 
-起動時に3つのユーザーが自動作成される:
+起動時に4つのユーザーが自動作成される:
 
 | ユーザー | 表示名 | メール | パスワード | 用途 |
 |---|---|---|---|---|
 | 一般ユーザー | `Developer` | `dev@example.com` | `devdev123` | ブラウザでの手動操作・デザイン作業 |
 | Claude Code用 | `Claude Code(MCP)` | `mcp-claude@penpot.local` | `mcpclaude123` | Claude Code MCP 自動接続 |
 | Copilot用 | `GitHub Copilot(MCP)` | `mcp-copilot@penpot.local` | `mcpcopilot123` | GitHub Copilot MCP 自動接続 |
+| OpenCode用 | `OpenCode(MCP)` | `mcp-opencode@penpot.local` | `mcpopencode123` | OpenCode MCP 自動接続 |
 
 - 各MCP専用ユーザーには起動時にデフォルトプロジェクト・ファイル（`MCP Workspace`）が自動作成される
-- 環境変数 `PENPOT_MCP_CLAUDE_EMAIL` / `PENPOT_MCP_COPILOT_EMAIL` 等でカスタマイズ可能
+- 環境変数 `PENPOT_MCP_CLAUDE_EMAIL` / `PENPOT_MCP_COPILOT_EMAIL` / `PENPOT_MCP_OPENCODE_EMAIL` 等でカスタマイズ可能
 - 一般ユーザーは `PENPOT_DEFAULT_EMAIL` / `PENPOT_DEFAULT_PASSWORD` でカスタマイズ可能
 - **MCP経由のデザイン操作は各MCP専用ユーザーの権限で実行される**（一般ユーザーのセッションとは独立）
 
@@ -115,23 +121,24 @@ docker exec -i penpot-penpot-postgres-1 psql -U penpot -d penpot -c "
     );"
 ```
 
-> 起動時に自動作成される3ユーザーはこれらの処理が自動で行われるため、手動操作は不要。
+> 起動時に自動作成される4ユーザーはこれらの処理が自動で行われるため、手動操作は不要。
 
-## Claude Code / Copilot 並行運用
+## Claude Code / Copilot / OpenCode 並行運用
 
-Claude Code と GitHub Copilot はそれぞれ専用の MCP サーバーインスタンス・専用ユーザーで動作するため、**同時接続が可能**。特別な設定は不要。
+Claude Code、GitHub Copilot、OpenCode はそれぞれ専用の MCP サーバーインスタンス・専用ユーザーで動作するため、**同時接続が可能**。特別な設定は不要。
 
 | AI ツール      | MCP HTTP ポート | 専用ユーザー               |
 | -------------- | --------------- | -------------------------- |
 | Claude Code    | 4401            | `mcp-claude@penpot.local`  |
 | GitHub Copilot | 4411            | `mcp-copilot@penpot.local` |
+| OpenCode       | 4421            | `mcp-opencode@penpot.local` |
 
 ## MCP サーバー: Official Penpot MCP (Plugin-Based)
 
 - **方式**: ブラウザの Penpot Plugin 経由で WebSocket 接続
 - **特徴**: Plugin API のフルアクセス、動的コード実行、階層構造・レイアウト制御可能
 - **制約**: headless Chromium (Playwright) セッションを維持する必要あり（mcp-connect が維持）
-- **並行運用**: Claude Code と Copilot はそれぞれ独立したMCPインスタンスで動作し、同時接続が可能
+- **並行運用**: Claude Code、Copilot、OpenCode はそれぞれ独立したMCPインスタンスで動作し、同時接続が可能
 
 ## 管理コマンド一覧
 
@@ -143,7 +150,7 @@ down                  全サービス停止
 restart               再起動
 status                稼働状況と MCP 接続情報
 logs [service]        ログ表示
-mcp-connect [claude|copilot|all]  Playwright headless MCP 自動接続
+mcp-connect [claude|copilot|opencode|all]  Playwright headless MCP 自動接続
 build                 MCP サーバーイメージ再ビルド
 setup [email] [pw]    ユーザー作成
 backup [dir]          DB・アセットのバックアップ
@@ -172,6 +179,15 @@ mcp-connect が使えない場合の手動手順（**MCP専用ユーザーでロ
 5. Install → プラグインパネルを開く
 6. "Connect to MCP server" をクリック
 7. **ブラウザタブを開いたまま** VS Code Copilot で操作
+
+### OpenCode 用
+1. Penpot をブラウザで開く (`http://localhost:9001`)
+2. `mcp-opencode@penpot.local` / `mcpopencode123` でログイン
+3. メインメニュー → Plugins → Plugin Manager
+4. プラグイン URL 入力: `http://localhost:4420/manifest.json`
+5. Install → プラグインパネルを開く
+6. "Connect to MCP server" をクリック
+7. **ブラウザタブを開いたまま** OpenCode で操作
 
 > 一般ユーザー (`dev@example.com`) でのブラウザ操作はMCP接続と独立して行える
 
@@ -214,6 +230,16 @@ mcp-connect が使えない場合の手動手順（**MCP専用ユーザーでロ
 | `PENPOT_MCP_COPILOT_WS_PORT` | `4412` | WebSocket ポート |
 | `PENPOT_MCP_COPILOT_LOG_LEVEL` | `info` | ログレベル |
 
+### MCP — OpenCode
+| 変数 | デフォルト | 説明 |
+|------|-----------|------|
+| `PENPOT_MCP_OPENCODE_EMAIL` | `mcp-opencode@penpot.local` | OpenCode用ユーザーメール |
+| `PENPOT_MCP_OPENCODE_PASSWORD` | `mcpopencode123` | OpenCode用ユーザーパスワード |
+| `PENPOT_MCP_OPENCODE_PLUGIN_PORT` | `4420` | プラグイン静的ファイルポート |
+| `PENPOT_MCP_OPENCODE_HTTP_PORT` | `4421` | MCP HTTP/SSE ポート |
+| `PENPOT_MCP_OPENCODE_WS_PORT` | `4422` | WebSocket ポート |
+| `PENPOT_MCP_OPENCODE_LOG_LEVEL` | `info` | ログレベル |
+
 ### Storybook
 | 変数 | デフォルト | 説明 |
 |------|-----------|------|
@@ -246,8 +272,12 @@ Claude Code — `.mcp.json` の `localhost` をサーバーIPに変更:
 {
   "mcpServers": {
     "penpot-official": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://<サーバーIP>:4401/mcp", "--allow-http"]
+      "command": "docker",
+      "args": [
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--build", "--rm", "-T", "penpot-proxy",
+        "--upstream=http://<サーバーIP>:4401/sse"
+      ]
     }
   }
 }
@@ -256,10 +286,30 @@ Claude Code — `.mcp.json` の `localhost` をサーバーIPに変更:
 GitHub Copilot (VS Code) — `.vscode/mcp.json` の `localhost` をサーバーIPに変更:
 ```json
 {
-  "servers": {
     "penpot-official": {
-      "url": "http://<サーバーIP>:4411/mcp",
-      "type": "http"
+      "command": "docker",
+      "args": [
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--rm", "-T", "penpot-proxy",
+        "--upstream=http://<サーバーIP>:4411/sse"
+      ],
+      "type": "stdio"
+    }
+}
+```
+
+OpenCode — `opencode.jsonc` の `localhost` をサーバーIPに変更:
+```jsonc
+{
+  "mcp": {
+    "penpot-official": {
+      "type": "local",
+      "command": ["docker",
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--build", "--rm", "-T", "penpot-proxy",
+        "--upstream=http://<サーバーIP>:4421/sse"
+      ],
+      "enabled": true
     }
   }
 }
@@ -267,7 +317,7 @@ GitHub Copilot (VS Code) — `.vscode/mcp.json` の `localhost` をサーバーI
 
 ### ネットワーク要件
 
-- クライアント → サーバーのポート **4401** (Claude Code) / **4411** (Copilot) が開放されていること
+- クライアント → サーバーのポート **4401** (Claude Code) / **4411** (Copilot) / **4421** (OpenCode) が開放されていること
 - ブラウザで Penpot UI にアクセスする場合は **9001** も必要
 - Docker のポートマッピングがデフォルト（`0.0.0.0` バインド）であること。
   `127.0.0.1:4401:4401` のように制限している場合はリモートから到達できない

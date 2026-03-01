@@ -1,7 +1,7 @@
 // ============================================================
 // Penpot Token Utilities (init.d: 10)
 //
-// activate 時に自動実行。冪等（再呼び出しでも安全）。
+// activate 時に自動実行。毎回再定義（ガードなし）。
 //
 // Provides: storage.VALID_TOKEN_TYPES, storage.TOKEN_PROPERTY_MAP,
 //           storage.findToken, storage.findTokenOrNull,
@@ -10,10 +10,24 @@
 //           storage.applyTokenToShapesSafe, storage.ensureTheme
 // ============================================================
 
-if (!storage.__tokenUtilsDone) {
-
 storage.__wrappers = storage.__wrappers || [];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/** .sets を安全に取得。Clojure プロトコルエラー時は fallback を返す */
+storage.safeTokenSets = (fallback = null) => {
+  try {
+    const c = penpot.library.local.tokens;
+    return c ? (c.sets ?? fallback) : fallback;
+  } catch { return fallback; }
+};
+
+/** .themes を安全に取得 */
+storage.safeTokenThemes = (fallback = null) => {
+  try {
+    const c = penpot.library.local.tokens;
+    return c ? (c.themes ?? fallback) : fallback;
+  } catch { return fallback; }
+};
 
 // 有効な TokenType 定数
 storage.VALID_TOKEN_TYPES = [
@@ -71,7 +85,9 @@ storage.findTokenOrNull = (name) => {
 storage.ensureTokenSet = async (name, opts) => {
   const activate = opts?.activate !== false;
   const catalog = penpot.library.local.tokens;
-  let set = catalog.sets.find(s => s.name === name);
+  let sets;
+  try { sets = catalog.sets; } catch { sets = null; }
+  let set = sets ? sets.find(s => s.name === name) : null;
   if (set) {
     if (activate && !set.active) {
       set.toggleActive();
@@ -81,7 +97,7 @@ storage.ensureTokenSet = async (name, opts) => {
   }
   catalog.addSet(name);
   await sleep(100);
-  set = catalog.sets.find(s => s.name === name);
+  set = storage.safeTokenSets([]).find(s => s.name === name);
   if (activate && !set.active) {
     set.toggleActive();
     await sleep(100);
@@ -104,12 +120,14 @@ storage.ensureToken = async (set, type, name, value, opts) => {
     }
     existing.remove();
     await sleep(50);
-    const updated = set.addToken(type, name, String(value));
+    set.addToken(type, name, String(value));
     await sleep(50);
+    const updated = set.tokens.find(t => t.name === name);
     return { token: updated, action: 'updated' };
   }
-  const token = set.addToken(type, name, String(value));
+  set.addToken(type, name, String(value));
   await sleep(50);
+  const token = set.tokens.find(t => t.name === name);
   return { token, action: 'created' };
 };
 
@@ -192,12 +210,14 @@ storage.applyTokenToShapesSafe = async (tokenOrName, shapes, properties) => {
  */
 storage.ensureTheme = async (group, name, sets) => {
   const catalog = penpot.library.local.tokens;
-  let theme = catalog.themes.find(t => t.name === name);
+  let themes;
+  try { themes = catalog.themes; } catch { themes = null; }
+  let theme = themes ? themes.find(t => t.name === name) : null;
   let created = false;
   if (!theme) {
     catalog.addTheme(group, name);
     await sleep(100);
-    theme = catalog.themes.find(t => t.name === name);
+    theme = storage.safeTokenThemes([]).find(t => t.name === name);
     if (!theme) throw new Error(`[ensureTheme] テーマ "${name}" の作成に失敗`);
     created = true;
   }
@@ -315,6 +335,8 @@ storage.ensureSemanticTokens = async (opts) => {
 };
 
 storage.__wrappers.push(
+  { fn: 'storage.safeTokenSets(fallback?)', replaces: 'catalog.sets', reason: 'Clojure プロトコルエラー安全な .sets 取得' },
+  { fn: 'storage.safeTokenThemes(fallback?)', replaces: 'catalog.themes', reason: 'Clojure プロトコルエラー安全な .themes 取得' },
   { fn: 'await storage.ensureTokenSet(name, opts)', replaces: 'catalog.addSet()+find()', reason: '冪等セット作成' },
   { fn: 'await storage.ensureToken(set, type, name, value)', replaces: 'set.addToken()', reason: '冪等トークン作成/更新' },
   { fn: 'await storage.ensureTokenBatch(set, tokens[])', replaces: null, reason: '一括トークン登録（10件バッチ+sleep）' },
@@ -328,5 +350,3 @@ storage.__wrappers.push(
   { fn: 'storage.TOKEN_PROPERTY_MAP', replaces: null, reason: 'トークンタイプ→プロパティ対応表' },
 );
 
-storage.__tokenUtilsDone = true;
-}

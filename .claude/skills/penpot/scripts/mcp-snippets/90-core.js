@@ -1,7 +1,7 @@
 // ============================================================
 // Penpot Core Utilities (init.d: 90 — 最後に実行)
 //
-// activate 時に自動実行。冪等（再呼び出しでも安全）。
+// activate 時に自動実行。毎回再定義（ガードなし）。
 // 基本ヘルパー + validateDesign + context/metrics + return。
 //
 // Provides: storage.spacing, storage.createText, storage.appendChild,
@@ -10,8 +10,6 @@
 //           storage.getPageContext, storage.toggleSetPersistent,
 //           storage.switchThemePersistent, storage.validateDesign
 // ============================================================
-
-if (!storage.__coreDone) {
 
 storage.__wrappers = storage.__wrappers || [];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -300,8 +298,8 @@ storage.validateDesign = (opts = {}) => {
 
   // トークン未適用検出（opt-in）
   if (opts.checkTokenCoverage) {
-    const catalog = penpot.library.local.tokens;
-    if (catalog.sets.length > 0) {
+    const tokenSetsForCheck = storage.safeTokenSets([]);
+    if (tokenSetsForCheck.length > 0) {
       const shapes = penpotUtils.findShapes(s => s.type !== 'board' && s.fills && s.fills.length > 0, root);
       let untokenized = 0;
       for (const s of shapes) {
@@ -331,12 +329,10 @@ storage.__wrappers.push(
   { fn: 'storage.validateDesign(opts)', replaces: null, reason: 'デザイン検証（font/size/page/gap/空ボード/ページ名重複/インタラクション）' },
 );
 
-storage.__coreDone = true;
-}
 
 // ── context/metrics（activate 毎に最新値）──
 const pages = penpotUtils.getPages();
-const tokenSets = penpot.library.local.tokens?.sets ?? [];
+const tokenSets = storage.safeTokenSets([]);
 const components = penpot.library.local.components ?? [];
 const connectedLibs = penpot.library.connected ?? [];
 

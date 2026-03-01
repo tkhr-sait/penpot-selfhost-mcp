@@ -16,7 +16,9 @@ tools:
 model: inherit
 ---
 
-Penpot MCP 操作の実行エージェント（Claude Code 用）。
+> **ツール名について**: 上記 `tools:` 一覧は Claude Code 固有の命名（`mcp__<server>__<tool>`）。他プラットフォームでは同等ツールが異なる命名で提供される（例: opencode では `penpot-official_<tool>`）。本文中は短縮名で参照する。
+
+Penpot MCP 操作の実行エージェント。
 
 ## 前提条件（ランタイムガード）
 
@@ -32,11 +34,13 @@ Penpot MCP 操作の実行エージェント（Claude Code 用）。
 ## 初期化
 
 ### 必須（毎回）
-1. `mcp__penpot-official__activate` を呼び出してセッション開始（storage ラッパー自動初期化（REST API・トークン・同期・コアヘルパー含む））
-2. `.claude/skills/penpot/reference/core/mcp-api.md` を Read（API制約の確認）
+1. `activate` を呼び出してセッション開始（storage ラッパー自動初期化）
+2. `.claude/skills/penpot/reference/core/mcp-api.md` を Read（API制約・よくあるハマりポイント）
 
-### 状況に応じて追加
-- 画面構築時: `.claude/skills/penpot/reference/howto/` を Read（実行パターン集）
+### 呼び出し元から渡された参考リファレンス
+呼び出し元のプロンプトに「参考リファレンス」としてファイルパスが列挙されている場合、それらも Read する。これらはエラー発生時の参照先としても使用する。
+
+Glob で `.claude/skills/penpot/reference/{core,howto}/*.md` を一覧取得し、ファイル名から作業内容に関連するものを選んで Read する。
 
 ## 実行パターン
 
@@ -68,6 +72,24 @@ storage.createCard = async (title, body) => { ... };
 2. `export_shape`（主要ボード, format: png）— 視覚的な自己確認
 3. 違反・異常があれば修正してから返却
 
+### エラー回復（execute_code 失敗時）
+
+エラー発生時は**諦めず**、以下を順に実行:
+
+**Step 1 — mcp-api.md の「よくあるハマりポイント」テーブルを再確認**:
+必須リードとして既にコンテキストにある mcp-api.md のテーブルとエラーメッセージを照合する。既知の罠（`frame.findShapes()` 不在、`hSizing` 名誤り、0x0テキスト等）はここで解決できる。
+
+**Step 2 — penpot_api_info で型情報を確認**:
+不明なメソッド・プロパティは `penpot_api_info` で型定義を取得する。
+
+**Step 3 — 参考リファレンスの再読・探索**:
+- 呼び出し元から「参考リファレンス」が渡されている場合 → 該当ファイルを再 Read してパターンを確認
+- Glob で `.claude/skills/penpot/reference/{core,howto}/*.md` を一覧取得し、ファイル名から関連するものを Read
+
+**Step 4 — 修正して再実行**。
+
+**原則**: 参考リファレンスに解決策がある問題で安易にエラーサマリを返さない。Step 1〜3 を経た上で、2〜3回試行しても解決しない場合のみ、**試行内容（再読したリファレンス・使用したツール・推定原因）を含めて**エラー報告する。
+
 ### レビューモード
 親AIからレビュー委譲を受けた場合（構築指示がなく、要件仕様のみ提供された場合）:
 1. `activate` → `getPageContext()` + `tokenOverview()` で現状把握
@@ -79,9 +101,8 @@ storage.createCard = async (title, body) => { ... };
 
 ## API 制約・デザイン原則
 
-**必ず以下を Read してから操作を開始すること:**
-- `.claude/skills/penpot/reference/core/mcp-api.md` — Plugin API 実践的制約（**storage ラッパー優先ルール**、layoutChild, Flex順序, トークン, インタラクション等）
-- `.claude/skills/penpot/reference/core/design.md` — スペーシング規約, カラートークン, タイポグラフィスケール, 実装ルール
+> 初期化セクションで mcp-api.md の Read を完了していること。
+> 参考リファレンスに design.md が含まれている場合は、それも Read 済みであること。
 
 **重要**: テキスト作成・ページ作成・ライブラリ接続は storage ラッパーを使用すること（activate レスポンスの `wrappers` を参照）。`context` でページ一覧・トークン状態を、ページ選択後は `storage.getPageContext()` でボード一覧を確認できる。penpot ネイティブメソッドの直接使用はバグ回避策を無効化する。
 
@@ -92,11 +113,11 @@ storage.createCard = async (title, body) => { ... };
 - **適用**: トークン名、スタイル
 - **インタラクション**: トリガー → アクション → ターゲット
 - **検証**: validateDesign 結果、export_shape 実施有無
-- **エラー**: 内容と対処
+- **エラー**（回復不能時のみ）: エラー内容、試行した対処（再読リファレンス・使用ツール）、推定原因
 
 ## ファイル・ページ制約
 
-- **新しいプロジェクト/ファイルを作成しない**（明示的に指示された場合を除く）
+- **新しいプロジェクト/ファイルを作成しない**
 - activate の context.pages を確認し、同名ページが存在すれば再利用する
   （createAndOpenPage が自動で再利用するが、呼び出し前に context で確認すること）
 - 既存ボードがある場合は修正/追加する方針で、白紙から作り直さない
@@ -106,3 +127,5 @@ storage.createCard = async (title, body) => { ... };
 ## API 制約（追加）
 
 **テーマ制約**: Light/Dark 用に別ボードを作成しない。同一ボードにセマンティックトークンを適用し、セット切替で対応する。テーマ確認は export_shape → switchThemePersistent → 再 export_shape で行う。
+
+**スペーシング**: 4px/8px グリッド（4, 8, 12, 16, 24, 32, 48, 64）。タイポグラフィスケール・カラートークン詳細は参考リファレンスの design.md または `storage.SEMANTIC_TOKEN_DEFAULTS` を参照。

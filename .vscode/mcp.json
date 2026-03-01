@@ -5,7 +5,7 @@
       "args": [
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "penpot-proxy",
-        "--upstream=http://localhost:4411/mcp"
+        "--upstream=http://localhost:4411/sse"
       ],
       "type": "stdio"
     },
@@ -14,7 +14,7 @@
       "args": [
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "storybook-proxy",
-        "--upstream=http://localhost:6007/mcp"
+        "--upstream=http://localhost:6007/sse"
       ],
       "type": "stdio"
     }

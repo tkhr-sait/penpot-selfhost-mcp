@@ -236,13 +236,45 @@ const WORKFLOW_SUFFIX = GATE_ENABLED
   ? "\n[WORKFLOW] 使用前に activate ツールの呼び出しが必要。"
   : "";
 
+// Known upstream tool schemas (fallback until real schemas are fetched)
+const KNOWN_SCHEMAS = {
+  execute_code: {
+    type: "object",
+    properties: {
+      code: { type: "string", description: "The JavaScript code to execute in the plugin context." },
+    },
+    required: ["code"],
+  },
+  export_shape: {
+    type: "object",
+    properties: {
+      shapeId: { type: "string", description: "Identifier of the shape to export. Use 'selection' to export the first selected shape." },
+      format: { type: "string", enum: ["svg", "png"], default: "png", description: "Output format: 'png' (default) or 'svg'." },
+      mode: { type: "string", enum: ["shape", "fill"], default: "shape", description: "Export mode: 'shape' (full shape) or 'fill' (raw image data from fill)." },
+    },
+    required: ["shapeId"],
+  },
+  penpot_api_info: {
+    type: "object",
+    properties: {
+      type: { type: "string", description: "Type name to look up." },
+      member: { type: "string", description: "Optional member name within the type." },
+    },
+    required: ["type"],
+  },
+  high_level_overview: {
+    type: "object",
+    properties: {},
+  },
+};
+
 // Build fallback tool definitions (before activate, gate mode only)
 function buildFallbackTools() {
   if (!GATE_ENABLED || TOOL_WILDCARD) return [];
   return TOOL_LIST.map((name) => ({
     name,
     description: `${SERVER_NAME} ツール (${name})。` + WORKFLOW_SUFFIX,
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: KNOWN_SCHEMAS[name] || { type: "object", properties: {} },
   }));
 }
 

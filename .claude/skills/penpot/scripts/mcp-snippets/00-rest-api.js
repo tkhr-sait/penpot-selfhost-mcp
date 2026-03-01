@@ -1,7 +1,7 @@
 // ============================================================
 // Penpot REST API Utilities (init.d: 00)
 //
-// activate 時に自動実行。冪等（再呼び出しでも安全）。
+// activate 時に自動実行。毎回再定義（ガードなし）。
 //
 // Provides: storage.api, storage.getProfile, storage.getTeamId,
 //           storage.getProjects, storage.createProject,
@@ -13,9 +13,7 @@
 //           storage.getFile, storage.getCurrentProjectId
 // ============================================================
 
-if (!storage.__restApiDone) {
-
-storage.__wrappers = storage.__wrappers || [];
+storage.__wrappers = [];
 
 // ---------------------------------------------------------------------------
 // タイムアウトヘルパー（プラグインコンテキストに AbortController がないため Promise.race）
@@ -215,5 +213,3 @@ storage.__wrappers.push(
   { fn: 'await storage.getFile(fileId)', replaces: null, reason: 'ファイル情報取得' },
 );
 
-storage.__restApiDone = true;
-}

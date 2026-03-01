@@ -18,18 +18,35 @@
       // output: Array of supported output types: ["text", "audio", "image", "video", "pdf"]          
       "models": {
         // 結局 penpot の知識がモデル内に無いため、スキル内容を充実させないと思うように動作しない。
+        // penpotで利用できるjsがバグってたり、呼び出す順番が決まってたりが把握できてないので毎回試行錯誤。
         // エージェント的な動作を学習しているのは minimax くらい。
         // M4mac 128GB での動作
         // ok 画像は見れない
         "unsloth/minimax-m2.5@iq2_m": {
-           // メモリに収まるし、実用的な速さ context-length: 128kくらい
+           // メモリに収まるし、実用的な速さ context-length: 196kくらい(Q8_0)
            "name": "unsloth/minimax-m2.5(2026.2,229B,IQ2_M,78GB)"
         },
+        // ng.. ツールうまく呼べない
+        //"mradermacher/minimax-m2.5-reap-139b-a10b-i1": {
+        //   "name": "mradermacher/minimax-m2.5-reap(2026.2,139B,Q4_K_M,84GB)"
+        //},
+        // ng.. ツールうまく呼べない
+        //"mradermacher/step-3.5-flash-i1": {
+        //   "name": "mradermacher/step-3.5-flash-i1(2026.2,197B,IQ3_XXS,76GB)"
+        //},
         // "unsloth/qwen3.5-397b-a17b": {
         //   // Visionがあるのが良い。が遅い... context-length: 90kくらいで125GB...
         //   "name": "unsloth/qwen3.5-397b-a17b(2026.2,397B,TQ1_0,96GB)",
         //   "modalities": {
         //     "input": ["text", "image"],
+        //     "output": ["text"]
+        //   }
+        // },
+        // "OpenMOSE/qwen3.5-reap-212b-a17b": {
+        //   // ng..指示無視。397bのREAP版。Visionはomitされている。
+        //   "name": "OpenMOSE/qwen3.5-reap-212b-a17b(2026.2,212B,IQ2_M,69GB)",
+        //   "modalities": {
+        //     "input": ["text"],
         //     "output": ["text"]
         //   }
         // },
@@ -81,7 +98,7 @@
       "command": ["docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--build", "--rm", "-T", "penpot-proxy",
-        "--upstream=http://localhost:4401/mcp"
+        "--upstream=http://localhost:4421/sse"
       ],
       "enabled": true
     },
@@ -90,7 +107,7 @@
       "command": ["docker",
         "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
         "run", "--rm", "-T", "storybook-proxy",
-        "--upstream=http://localhost:6007/mcp"
+        "--upstream=http://localhost:6007/sse"
       ],
       "enabled": true
     }

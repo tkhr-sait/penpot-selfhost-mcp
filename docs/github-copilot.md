@@ -28,7 +28,7 @@ Penpot MCP は GitHub Copilot の Agent Mode から利用できる。
 
 1. Docker サービスが起動しているか: `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh status`
 2. MCP 自動接続が実行中か: `bash .claude/skills/penpot/scripts/penpot-selfhost/penpot-manage.sh mcp-connect copilot`
-3. ポート 4411 が応答するか: `curl http://localhost:4411/mcp`
+3. ポート 4411 が応答するか: `curl http://localhost:4411/sse`
 4. VS Code: `MCP: List Servers` → `penpot-official` を Restart
 
 ### ツール実行がタイムアウトする

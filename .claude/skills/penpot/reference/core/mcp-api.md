@@ -95,16 +95,16 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 
 ### execute_code
 
-- **戻り値は `return` で返す**: 末尾の式評価では出力されない（`result` が空文字になる）
+- **戻り値は `return` で返す**: 末尾の式評価では出力されない（`result` が空文字になる）。戻り値は自動シリアライズされるため `JSON.stringify` は不要
   ```javascript
-  // NG: result が空
-  JSON.stringify(data);
-  // OK
-  return JSON.stringify(data);
+  // NG: result が空（return なし）
+  penpotUtils.shapeStructure(shape, 2);
+  // OK: オブジェクトをそのまま return（自動シリアライズ）
+  return penpotUtils.shapeStructure(shape, 2);
   ```
 - **`penpotUtils` を活用する**: 独自のシェイプ検索・ページ走査を実装しない
   - ページ走査: `penpotUtils.getPages()` / `penpotUtils.getPageById(id)`（※ `penpot.pages` は存在しない）
-  - シェイプ検索: `penpotUtils.findShapes(predicate, root)` — root に frame を渡せば配下を再帰検索（※ `frame.findShapes()` は存在しない。`page.findShapes()` とは別）
+  - シェイプ検索: `penpotUtils.findShapes(predicate, root)` — root 省略（null）で全ページ横断検索。root に frame/page を渡せば配下を再帰検索（※ `frame.findShapes()` は存在しない。`page.findShapes()` とは別）
   - 構造確認: `penpotUtils.shapeStructure(shape, depth)`
   - 全ユーティリティ一覧: `high_level_overview` 参照
 - **不明な型・メソッド**: `penpot_api_info` で確認してから使用
@@ -135,15 +135,20 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 - `storage.createText()` で fontFamily 自動設定（sourcesanspro）
 - `growType` は `resize()` 後に "fixed" リセット → 必要なら再設定
 - サイズ変更は `fontSize` プロパティ（`resize()` ではない）
+- `text.textBounds` でテキストのバウンディングボックス取得（オーバーフロー含む `{ x, y, width, height }`）
 
 ### ボード・シェイプ
 - `width`/`height` は読み取り専用 → `resize(w, h)`
+- `fills`/`strokes` の配列要素は読み取り専用 → 配列全体を置換: `shape.fills = [{ fillColor: "#FF0000", fillOpacity: 1 }]`
 - `remove()` はコンポーネント配下では非表示のみ（完全削除は REST API `del-component` / `purge-component`）
 
 ### トークン
 - `token.value` は読み取り専用 → `remove()` + `addToken()` で更新
 - `addSet()` 戻り値は即時読取不可 → `catalog.sets.find()` で再取得
 - 大量操作は 10件バッチ + 200ms sleep（WebSocket 切断対策。切断しても MCP 再接続は不要、自動復帰）
+> **注意**: `penpot_api_info` の型情報では camelCase（`strokeColor` 等）で表示されるが、
+> `applyToken` / `applyTokenSafe` のプロパティ引数は **kebab-case**（`stroke-color` 等）を使用する。
+
 - `storage.applyTokenSafe()` のトークンタイプ→プロパティ対応:
 
 | トークンタイプ | 適用プロパティ |
@@ -273,6 +278,9 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 | `penpot.pages` がエラー | 存在しないプロパティ | `penpotUtils.getPages()` |
 | インタラクションが動かない | 異なるページ間で設定 | 同一ページ内のボード間のみ有効 |
 | `OpenOverlay` が効かない | Plugin API 未実装 | `navigate-to` で代替 |
+| `shape.fills[0].fillColor = ...` が効かない | fills/strokes の要素は読み取り専用 | 配列全体を置換: `shape.fills = [{...}]` |
+| `token.resolvedValue` が null/不正 | Plugin API の既知バグ (#8341) | `token.value` を使用。fontFamilies は fontNameMap で手動変換 |
+| Flex 内で `verticalSizing`/`horizontalSizing` が効かない | Plugin API の既知バグ | `resize()` で手動サイズ指定 |
 | 大量操作で WebSocket 切断 | バースト過多 | 10件バッチ + 200ms sleep |
 | 切断後にカスタムヘルパーが消失 | WebSocket 自動復帰で storage リセット | 冪等ガード付きヘルパー登録を再実行（ビルトインは activate で復元） |
 

@@ -7,12 +7,45 @@
 
 ## レビューワークフロー
 
-1. `mcp__penpot-official__export_shape` で対象ボードを PNG エクスポート
-2. 下記「UI/UX チェックリスト」で評価し、指摘事項を洗い出す
-3. 「コメント作成」セクションの手順で指摘をコメント登録
-4. 「コメント取得」で登録結果を確認し、ユーザーにサマリを共有
+1. 下記「ボード・シェイプ取得」でレビュー対象のボードを特定
+2. `mcp__penpot-official__export_shape` で対象ボードを PNG エクスポート
+3. 下記「UI/UX チェックリスト」で評価し、指摘事項を洗い出す
+4. 「コメント作成」セクションの手順で指摘をコメント登録
+5. 「コメント取得」で登録結果を確認し、ユーザーにサマリを共有
 
 テーマがある場合は `storage.switchThemePersistent()` で Light / Dark 両方を確認する。
+
+## ボード・シェイプ取得
+
+### ボード一覧の取得
+
+```javascript
+// ページ上の全ボードを取得（ID・名前・サイズ）
+const ctx = storage.getPageContext();
+return ctx;
+// → { page: { id, name }, boards: [{ id, name, width, height }, ...] }
+```
+
+`boards[].id` を `mcp__penpot-official__export_shape` の `shapeId` に渡す。
+
+### ボード内シェイプの検索
+
+```javascript
+// ⚠ board.findShapes() は存在しない — penpotUtils.findShapes() を使う
+const boards = penpot.currentPage.findShapes({ type: 'board' });
+const board = boards.find(b => b.name === 'Home');
+
+// ボード配下の全シェイプを再帰検索
+const allShapes = penpotUtils.findShapes(() => true, board);
+return allShapes.map(s => ({ name: s.name, type: s.type, id: s.id }));
+```
+
+### シェイプ構造の確認
+
+```javascript
+const board = penpot.currentPage.findShapes({ name: 'Home', type: 'board' })[0];
+return penpotUtils.shapeStructure(board, 3); // depth=3 で3階層まで表示
+```
 
 ## UI/UX チェックリスト
 

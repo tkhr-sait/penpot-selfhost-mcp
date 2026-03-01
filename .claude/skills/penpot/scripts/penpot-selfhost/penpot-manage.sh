@@ -13,6 +13,8 @@ IMG_MCP_CLAUDE="${PROJECT_NAME}-penpot-mcp-claude"
 IMG_MCP_COPILOT="${PROJECT_NAME}-penpot-mcp-copilot"
 IMG_MCP_CONNECT_CLAUDE="${PROJECT_NAME}-penpot-mcp-connect-claude"
 IMG_MCP_CONNECT_COPILOT="${PROJECT_NAME}-penpot-mcp-connect-copilot"
+IMG_MCP_OPENCODE="${PROJECT_NAME}-penpot-mcp-opencode"
+IMG_MCP_CONNECT_OPENCODE="${PROJECT_NAME}-penpot-mcp-connect-opencode"
 VOL_ASSETS="${PROJECT_NAME}_penpot_assets"
 
 dc() {
@@ -45,6 +47,9 @@ _show_mcp_info() {
   local copilot_plugin_port="${PENPOT_MCP_COPILOT_PLUGIN_PORT:-4410}"
   local copilot_http_port="${PENPOT_MCP_COPILOT_HTTP_PORT:-4411}"
   local copilot_ws_port="${PENPOT_MCP_COPILOT_WS_PORT:-4412}"
+  local opencode_plugin_port="${PENPOT_MCP_OPENCODE_PLUGIN_PORT:-4420}"
+  local opencode_http_port="${PENPOT_MCP_OPENCODE_HTTP_PORT:-4421}"
+  local opencode_ws_port="${PENPOT_MCP_OPENCODE_WS_PORT:-4422}"
 
   echo "=== MCP Plugin Setup ==="
   echo ""
@@ -58,11 +63,17 @@ _show_mcp_info() {
   echo "  MCP HTTP/SSE:     http://localhost:${copilot_http_port}/sse"
   echo "  WebSocket:        ws://localhost:${copilot_ws_port}"
   echo ""
+  echo "OpenCode Instance:"
+  echo "  Plugin manifest:  http://localhost:${opencode_plugin_port}/manifest.json"
+  echo "  MCP HTTP/SSE:     http://localhost:${opencode_http_port}/sse"
+  echo "  WebSocket:        ws://localhost:${opencode_ws_port}"
+  echo ""
   echo "Auto-connect:"
-  echo "  Both instances are connected automatically via headless Playwright."
+  echo "  All instances are connected automatically via headless Playwright."
   echo "  Check logs:  bash $0 logs penpot-mcp-connect-claude"
   echo "               bash $0 logs penpot-mcp-connect-copilot"
-  echo "  Reconnect:   bash $0 mcp-connect [claude|copilot|all]"
+  echo "               bash $0 logs penpot-mcp-connect-opencode"
+  echo "  Reconnect:   bash $0 mcp-connect [claude|copilot|opencode|all]"
   echo ""
   echo "Penpot Design System Storybook:"
   echo "  URL: http://localhost:${PENPOT_STORYBOOK_PORT:-6006}"
@@ -90,6 +101,14 @@ cmd_up() {
     echo "Building MCP Copilot auto-connect image (first run, may take a few minutes)..."
     dc build penpot-mcp-connect-copilot
   fi
+  if ! docker image inspect $IMG_MCP_OPENCODE > /dev/null 2>&1; then
+    echo "Building MCP OpenCode server image (first run, may take a few minutes)..."
+    dc build penpot-mcp-opencode
+  fi
+  if ! docker image inspect $IMG_MCP_CONNECT_OPENCODE > /dev/null 2>&1; then
+    echo "Building MCP OpenCode auto-connect image (first run, may take a few minutes)..."
+    dc build penpot-mcp-connect-opencode
+  fi
   local sb_profile
   sb_profile=$(_storybook_profile_args)
   if [ -n "$sb_profile" ]; then
@@ -105,7 +124,7 @@ cmd_up() {
   # Auto-create default test user if not already registered
   _auto_setup_profile
 
-  # Auto-create MCP dedicated users (Claude + Copilot)
+  # Auto-create MCP dedicated users (Claude + Copilot + OpenCode)
   _auto_setup_mcp_profiles
 
   # Create shared team and add all users
@@ -114,6 +133,7 @@ cmd_up() {
   # Ensure MCP workspace files exist (in shared team if available)
   _setup_mcp_workspace "${PENPOT_MCP_CLAUDE_EMAIL:-mcp-claude@penpot.local}" "${PENPOT_MCP_CLAUDE_PASSWORD:-mcpclaude123}"
   _setup_mcp_workspace "${PENPOT_MCP_COPILOT_EMAIL:-mcp-copilot@penpot.local}" "${PENPOT_MCP_COPILOT_PASSWORD:-mcpcopilot123}"
+  _setup_mcp_workspace "${PENPOT_MCP_OPENCODE_EMAIL:-mcp-opencode@penpot.local}" "${PENPOT_MCP_OPENCODE_PASSWORD:-mcpopencode123}"
 
   _show_mcp_info
 }
@@ -185,6 +205,11 @@ _auto_setup_mcp_profiles() {
     "${PENPOT_MCP_COPILOT_EMAIL:-mcp-copilot@penpot.local}" \
     "${PENPOT_MCP_COPILOT_PASSWORD:-mcpcopilot123}" \
     "${PENPOT_MCP_COPILOT_NAME:-GitHub Copilot(MCP)}"
+
+  _create_mcp_user \
+    "${PENPOT_MCP_OPENCODE_EMAIL:-mcp-opencode@penpot.local}" \
+    "${PENPOT_MCP_OPENCODE_PASSWORD:-mcpopencode123}" \
+    "${PENPOT_MCP_OPENCODE_NAME:-OpenCode(MCP)}"
 }
 
 _setup_shared_teams() {
@@ -357,7 +382,7 @@ cmd_logs() {
 
 cmd_build() {
   echo "Building MCP server images..."
-  dc build penpot-mcp-claude penpot-mcp-copilot penpot-mcp-connect-claude penpot-mcp-connect-copilot
+  dc build penpot-mcp-claude penpot-mcp-copilot penpot-mcp-opencode penpot-mcp-connect-claude penpot-mcp-connect-copilot penpot-mcp-connect-opencode
   echo "MCP images built successfully."
 }
 
@@ -515,6 +540,16 @@ cmd_mcp_connect() {
       dc up -d --force-recreate penpot-mcp-connect-copilot
       echo "Check logs: bash $0 logs penpot-mcp-connect-copilot"
       ;;
+    opencode)
+      if ! dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp-connect-opencode; then
+        echo "Error: penpot-mcp-connect-opencode is not running."
+        echo "Start all services first:  bash $0 up"
+        exit 1
+      fi
+      echo "Restarting MCP auto-connect (OpenCode)..."
+      dc up -d --force-recreate penpot-mcp-connect-opencode
+      echo "Check logs: bash $0 logs penpot-mcp-connect-opencode"
+      ;;
     all)
       local has_service=false
       if dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp-connect-claude; then
@@ -527,6 +562,11 @@ cmd_mcp_connect() {
         echo "Restarting MCP auto-connect (Copilot)..."
         dc up -d --force-recreate penpot-mcp-connect-copilot
       fi
+      if dc ps --format '{{.Service}}' 2>/dev/null | grep -q penpot-mcp-connect-opencode; then
+        has_service=true
+        echo "Restarting MCP auto-connect (OpenCode)..."
+        dc up -d --force-recreate penpot-mcp-connect-opencode
+      fi
       if [ "$has_service" = false ]; then
         echo "Error: No MCP connect services are running."
         echo "Start all services first:  bash $0 up"
@@ -534,9 +574,10 @@ cmd_mcp_connect() {
       fi
       echo "Check logs: bash $0 logs penpot-mcp-connect-claude"
       echo "            bash $0 logs penpot-mcp-connect-copilot"
+      echo "            bash $0 logs penpot-mcp-connect-opencode"
       ;;
     *)
-      echo "Usage: $0 mcp-connect [claude|copilot|all]"
+      echo "Usage: $0 mcp-connect [claude|copilot|opencode|all]"
       exit 1
       ;;
   esac
@@ -568,7 +609,7 @@ Commands:
   build                 Rebuild MCP server images (after Dockerfile changes)
   setup [email] [pw] [name]  Quick setup with default profile (dev@example.com / devdev123)
   create-profile [e] [n] [p] Create a user profile (interactive if no args)
-  mcp-connect [claude|copilot|all]  Auto-connect MCP plugin via headless Playwright
+  mcp-connect [claude|copilot|opencode|all]  Auto-connect MCP plugin via headless Playwright
   wait-mcp [target] [timeout]  Wait for MCP connection (default: claude, 60s)
   urls                  Show service URLs
   backup [dir]          Backup database and assets

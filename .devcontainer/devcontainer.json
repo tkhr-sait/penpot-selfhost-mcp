@@ -97,6 +97,21 @@
       "onAutoForward": "silent",
       "requireLocalPort": true
     },
+    "4420": {
+      "label": "mcp-opencode-plugin",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "4421": {
+      "label": "mcp-opencode-http",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "4422": {
+      "label": "mcp-opencode-ws",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
     "8080": {
       "onAutoForward": "ignore",
       "requireLocalPort": true

@@ -26,10 +26,13 @@ ARG PENPOT_MCP_WEBSOCKET_URL=http://localhost:4402
 WORKDIR /build
 
 # Sparse checkout: only mcp/ directory
-RUN git clone --depth 1 --filter=blob:none --sparse \
-    -b "${PENPOT_REF}" \
+# PENPOT_REF can be a branch/tag name OR a commit hash.
+# For commit hashes, we need sufficient depth to reach the commit.
+RUN git clone --depth 50 --filter=blob:none --sparse \
+    -b develop \
     https://github.com/penpot/penpot.git . && \
-    git sparse-checkout set mcp
+    git sparse-checkout set mcp && \
+    git checkout "${PENPOT_REF}"
 
 WORKDIR /build/mcp
 

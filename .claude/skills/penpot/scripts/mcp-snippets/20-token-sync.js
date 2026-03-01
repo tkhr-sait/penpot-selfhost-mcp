@@ -1,7 +1,7 @@
 // ============================================================
 // Penpot Token Sync Utilities (init.d: 20)
 //
-// activate 時に自動実行。冪等（再呼び出しでも安全）。
+// activate 時に自動実行。毎回再定義（ガードなし）。
 //
 // Provides: storage.exportTokensDTCG,
 //           storage.importTokensDTCG,
@@ -9,17 +9,15 @@
 //           storage.generateStyleDictionaryConfig
 // ============================================================
 
-if (!storage.__tokenSyncDone) {
-
 storage.__wrappers = storage.__wrappers || [];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // --- Export: Penpot → W3C DTCG JSON ---
 
 storage.exportTokensDTCG = () => {
-  const catalog = penpot.library.local.tokens;
-  const sets = catalog.sets;
-  const themes = catalog.themes;
+  const sets = storage.safeTokenSets();
+  if (!sets) throw new Error('[exportTokensDTCG] トークンセットを取得できません。トークンライブラリが未作成の可能性があります。');
+  const themes = storage.safeTokenThemes() || [];
 
   // fontFamilies: ClojureScript PersistentVector → CSS 名マッピング
   const fontNameMap = {
@@ -66,11 +64,7 @@ storage.exportTokensDTCG = () => {
     const rawVal = String(token.value || '').replace(/\s/g, '').toLowerCase();
     if (fontNameMap[rawVal]) return fontNameMap[rawVal];
 
-    // 2. resolvedValue を試す
-    const resolved = token.resolvedValue;
-    if (typeof resolved === 'string' && resolved.length > 0) return resolved;
-
-    // 3. PersistentVector 対策: $tail$ 配列から文字列を抽出
+    // 2. PersistentVector 対策: $tail$ 配列から文字列を抽出
     const val = token.value;
     if (val && typeof val === 'object') {
       if (Array.isArray(val.$tail$)) {
@@ -83,7 +77,7 @@ storage.exportTokensDTCG = () => {
       }
     }
 
-    // 4. フォールバック
+    // 3. フォールバック
     return String(token.value);
   };
 
@@ -202,8 +196,10 @@ const IMPORT_TOKEN_OP_SLEEP_MS = 50;  // addToken, value 更新後
 // 戻り値: { allBatchItems, existingSets, existingTokensBySet, stats }
 const _prepareSets = async (dtcg, stats) => {
   const catalog = penpot.library.local.tokens;
+  const currentSets = storage.safeTokenSets();
+  if (!currentSets) throw new Error('[_prepareSets] トークンセットを取得できません。トークンライブラリが未作成の可能性があります。');
   const existingSets = {};
-  for (const s of catalog.sets) {
+  for (const s of currentSets) {
     existingSets[s.name] = s;
   }
 
@@ -219,8 +215,8 @@ const _prepareSets = async (dtcg, stats) => {
     if (!tokenSet) {
       catalog.addSet(setName);
       await sleep(IMPORT_SET_OP_SLEEP_MS);
-      // addSet() 戻り値のプロパティ即時読取不可 → catalog.sets から再取得
-      tokenSet = catalog.sets.find(s => s.name === setName);
+      // addSet() 戻り値のプロパティ即時読取不可 → safeTokenSets から再取得
+      tokenSet = storage.safeTokenSets([]).find(s => s.name === setName);
       existingSets[setName] = tokenSet;
       stats.setsCreated++;
     } else {
@@ -424,5 +420,3 @@ storage.__wrappers.push(
   { fn: 'storage.generateStyleDictionaryConfig(opts)', replaces: null, reason: 'Style Dictionary 設定ファイル生成' },
 );
 
-storage.__tokenSyncDone = true;
-}

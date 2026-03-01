@@ -94,10 +94,14 @@ docker-compose.yml  → service preset（環境変数 + volume mount で Penpot 
 `.mcp.json` の例:
 ```json
 {
-  "penpot-official": {
-    "command": "docker",
-    "args": ["compose", "-f", "...docker-compose.yml", "run", "--rm", "-T",
-             "penpot-proxy", "--upstream=http://localhost:4401/mcp"]
+    "penpot-official": {
+      "command": "docker",
+      "args": [
+        "compose", "-f", ".claude/skills/penpot/scripts/mcp-proxy/docker-compose.yml",
+        "run", "--build", "--rm", "-T", "penpot-proxy",
+        "--upstream=http://localhost:4401/sse"
+      ]
+    }
   }
 }
 ```

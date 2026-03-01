@@ -45,10 +45,11 @@ Penpot セルフホスト環境と MCP サーバーをオールインワンの D
 
 ## 対応AIツール
 
-| ツール                   | MCP設定ファイル    | 備考                                                                              |
-| ------------------------ | ------------------ | --------------------------------------------------------------------------------- |
-| Claude Code(CLI)         | `.mcp.json`        | Streamable HTTP で直接接続                                                        |
-| GitHub Copilot (VS Code) | `.vscode/mcp.json` | ネイティブ HTTP 対応 → [利用ガイド](.claude/skills/penpot/docs/github-copilot.md) |
+| ツール                   | MCP設定ファイル    | 
+| ------------------------ | ------------------ | 
+| Claude Code(CLI)         | `.mcp.json`        | 
+| OpenCode(CLI)            | `.mcp.json`        | 
+| GitHub Copilot (VS Code) | `.vscode/mcp.json` | 
 
 > Claude Code の [VS Code extension](https://code.claude.com/docs/en/vs-code#vs-code-extension-vs-claude-code-cli) を使う場合は `/penpot` でスキルを明示的に起動する必要がある。
 
