@@ -6,7 +6,7 @@
 #                              Plugin static files served on port 4400
 #
 # Build args:
-#   PENPOT_REF              - Git ref to checkout (default: develop)
+#   PENPOT_REF              - Git ref to checkout (default: mcp-prod)
 #   PENPOT_MCP_WEBSOCKET_URL - WebSocket URL embedded in plugin at build time
 #                              (default: http://localhost:4402)
 
@@ -20,19 +20,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
-ARG PENPOT_REF=develop
+ARG PENPOT_REF=mcp-prod
 ARG PENPOT_MCP_WEBSOCKET_URL=http://localhost:4402
 
 WORKDIR /build
 
 # Sparse checkout: only mcp/ directory
-# PENPOT_REF can be a branch/tag name OR a commit hash.
-# For commit hashes, we need sufficient depth to reach the commit.
-RUN git clone --depth 50 --filter=blob:none --sparse \
-    -b develop \
+RUN git clone --depth 1 --filter=blob:none --sparse \
+    -b "${PENPOT_REF}" \
     https://github.com/penpot/penpot.git . && \
-    git sparse-checkout set mcp && \
-    git checkout "${PENPOT_REF}"
+    git sparse-checkout set mcp
 
 WORKDIR /build/mcp
 

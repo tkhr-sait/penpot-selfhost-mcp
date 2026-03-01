@@ -142,8 +142,6 @@ services:
   penpot-mcp-claude:
     build:
       context: ./penpot-mcp
-      args:
-        PENPOT_REF: "426053a"
     restart: unless-stopped
     depends_on:
       - penpot-frontend
@@ -168,8 +166,6 @@ services:
   penpot-mcp-copilot:
     build:
       context: ./penpot-mcp
-      args:
-        PENPOT_REF: "426053a"
     restart: unless-stopped
     depends_on:
       - penpot-frontend
@@ -213,8 +209,6 @@ services:
   penpot-mcp-opencode:
     build:
       context: ./penpot-mcp
-      args:
-        PENPOT_REF: "426053a"
     restart: unless-stopped
     depends_on:
       - penpot-frontend
