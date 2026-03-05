@@ -1,5 +1,7 @@
 # Claude Code Project Instructions
 
+- Fallbackコードは書かない
+
 ## Language
 - Respond in Japanese (日本語で応答すること)
 

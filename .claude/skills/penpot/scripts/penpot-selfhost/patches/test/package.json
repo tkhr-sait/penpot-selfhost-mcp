@@ -1,0 +1,8 @@
+{
+  "name": "penpot-ime-test",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@playwright/test": "~1.58.0"
+  }
+}

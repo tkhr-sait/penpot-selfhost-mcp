@@ -151,9 +151,10 @@ storage.getFileComments = async () => {
 // 接続後に penpot.library.connected から取得し直すことで正しい値を返す。
 storage.connectLibrary = async (libraryId) => {
   await penpot.library.connectLibrary(libraryId);
-  const lib = penpot.library.connected.find(l => l.id === libraryId);
+  const lib = await storage.pollFind(() => penpot.library.connected.find(l => l.id === libraryId));
   if (!lib) {
-    throw new Error(`[connectLibrary] 接続後にライブラリが見つかりません: ${libraryId}`);
+    console.warn(`[connectLibrary] 接続後にライブラリが見つかりません（キャッシュ問題の可能性）: ${libraryId}`);
+    return null;
   }
   return lib;
 };
@@ -187,11 +188,24 @@ storage.toggleSetPersistent = async (setName, active) => {
 // 例: await storage.switchThemePersistent(['Shared', 'Dark'], ['Light'])
 storage.switchThemePersistent = async (activeSets, inactiveSets) => {
   const results = [];
+  const warnings = [];
   for (const name of inactiveSets) {
-    results.push(await storage.toggleSetPersistent(name, false));
+    try {
+      results.push(await storage.toggleSetPersistent(name, false));
+    } catch (e) {
+      warnings.push(`"${name}" inactive: ${e.message}`);
+    }
   }
   for (const name of activeSets) {
-    results.push(await storage.toggleSetPersistent(name, true));
+    try {
+      results.push(await storage.toggleSetPersistent(name, true));
+    } catch (e) {
+      warnings.push(`"${name}" active: ${e.message}`);
+    }
+  }
+  if (warnings.length > 0) {
+    console.warn(`[switchThemePersistent] ${warnings.join('; ')}`);
+    results.__warning = warnings.join('; ');
   }
   return results;
 };

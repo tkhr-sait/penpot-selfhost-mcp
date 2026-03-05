@@ -48,6 +48,10 @@ __pycache__/
 coverage/
 .nyc_output/
 
+# Playwright
+playwright-report/
+test-results/
+
 *storybook.log
 
 # Lost Pixel

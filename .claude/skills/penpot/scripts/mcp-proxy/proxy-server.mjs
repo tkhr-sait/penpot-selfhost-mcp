@@ -62,6 +62,14 @@ let upstream = null; // Client instance
 let unlocked = false;
 let initDone = false;
 
+// --- Storage uninit detection (WS reconnect causes empty storage) ---
+function isStorageUninitError(result) {
+  if (!result?.isError) return false;
+  const text = result.content?.find(c => c.type === "text")?.text;
+  if (!text) return false;
+  return text.includes("storage.") && text.includes("is not a function");
+}
+
 // --- Upstream connection (new or reconnect) ---
 async function connectUpstream() {
   if (upstream) {
@@ -433,7 +441,15 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   // --- Forward to upstream ---
   try {
-    return await upstream.callTool({ name, arguments: args });
+    const result = await upstream.callTool({ name, arguments: args });
+    // storage メソッド消失検出: WS 再接続で storage が空になった場合、init 再実行で復旧
+    if (name === INIT_TOOL && isStorageUninitError(result)) {
+      console.error("[mcp-proxy] storage uninit detected, re-running autoInit");
+      const initResult = await autoInit(true);
+      if (initResult?.isError) return initResult;
+      return await upstream.callTool({ name, arguments: args });
+    }
+    return result;
   } catch (e) {
     // Upstream disconnected (keep unlocked, don't re-lock)
     const stale = upstream;

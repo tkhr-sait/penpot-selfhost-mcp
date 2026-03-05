@@ -178,47 +178,6 @@ handle-key-down
 
 ---
 
-## ランタイムパッチ: SVGAnimatedString クラッシュ修正
-
-### 修正日: 2026-02-14
-
-### 問題
-
-PenpotのキャンバスはSVGで描画される。SVG要素の `className` は HTML要素のような `string` ではなく `SVGAnimatedString` オブジェクトを返すため、`.indexOf()` メソッドが存在せずクラッシュする。
-
-```javascript
-// NG: SVG要素では className は SVGAnimatedString
-var cls = target.className || "";        // SVGAnimatedString オブジェクト
-cls.indexOf("comment-input");             // TypeError: indexOf is not a function
-
-var pc = parent.className || "";          // 同上
-pc.indexOf("comment");                    // TypeError
-```
-
-### 修正内容
-
-`getClassName()` ヘルパー関数を追加し、SVG/HTML両要素で安全にclass文字列を取得:
-
-```javascript
-function getClassName(el) {
-  if (!el) return "";
-  var cn = el.className;
-  if (typeof cn === "string") return cn;              // HTML要素
-  if (cn && typeof cn.baseVal === "string") return cn.baseVal;  // SVG要素
-  return el.getAttribute("class") || "";              // フォールバック
-}
-```
-
-`target.className` / `parent.className` の直接参照を全て `getClassName(target)` / `getClassName(parent)` に置換。
-
-### 確認結果
-
-- [x] キャンバス上テキスト編集でクラッシュしなくなった
-- [x] コメント入力欄のIME二重表示防止は引き続き動作
-- [ ] `resolveComposition` エラー（テキストエディタライブラリ内部）はパッチのクラッシュ連鎖が解消されたことで発生しなくなったが、ライブラリ自体のIMEハンドリングは別問題としてupstream修正待ち
-
----
-
 ## テスト観点
 
 - [ ] 日本語IME（Google日本語入力、macOS標準）でコメント入力 → Enter確定 → 二重表示されない
@@ -251,6 +210,7 @@ upstream修正後に `PENPOT_PATCH_IME_FIX=false` を設定して動作確認し
 |------|----------|
 | 初版 | コメント入力欄のIME二重表示防止パッチ作成 |
 | 2026-02-14 | SVGAnimatedString クラッシュ修正 — `getClassName()` ヘルパー追加 |
+| 2026-03-03 | 正統方式に全面書き換え — composing state tracking に統一。CSSクラス名マッチング・DOM走査・getClassName()・compositionJustEndedタイマーを全て除去。upstream修正と同じパターン |
 
 ---
 

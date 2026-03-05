@@ -13,6 +13,16 @@
 storage.__wrappers = storage.__wrappers || [];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+/** タイミング依存 find のポーリング。初回 + 最大2回リトライ = 計3回試行。 */
+storage.pollFind = async (fn, { retries = 2, interval = 100 } = {}) => {
+  for (let i = 0; i <= retries; i++) {
+    const result = fn();
+    if (result != null) return result;
+    if (i < retries) await sleep(interval);
+  }
+  return null;
+};
+
 /** .sets を安全に取得。Clojure プロトコルエラー時は fallback を返す */
 storage.safeTokenSets = (fallback = null) => {
   try {
@@ -90,17 +100,26 @@ storage.ensureTokenSet = async (name, opts) => {
   let set = sets ? sets.find(s => s.name === name) : null;
   if (set) {
     if (activate && !set.active) {
-      set.toggleActive();
-      await sleep(100);
+      try {
+        set.toggleActive();
+        await sleep(100);
+      } catch (e) {
+        console.warn(`[ensureTokenSet] toggleActive failed for "${name}": ${e.message}`);
+      }
     }
     return { set, created: false };
   }
   catalog.addSet(name);
   await sleep(100);
-  set = storage.safeTokenSets([]).find(s => s.name === name);
+  set = await storage.pollFind(() => storage.safeTokenSets([]).find(s => s.name === name));
+  if (!set) throw new Error(`[ensureTokenSet] セット "${name}" の作成確認に失敗`);
   if (activate && !set.active) {
-    set.toggleActive();
-    await sleep(100);
+    try {
+      set.toggleActive();
+      await sleep(100);
+    } catch (e) {
+      console.warn(`[ensureTokenSet] toggleActive failed for "${name}": ${e.message}`);
+    }
   }
   return { set, created: true };
 };
@@ -122,12 +141,14 @@ storage.ensureToken = async (set, type, name, value, opts) => {
     await sleep(50);
     set.addToken(type, name, String(value));
     await sleep(50);
-    const updated = set.tokens.find(t => t.name === name);
+    const updated = await storage.pollFind(() => set.tokens.find(t => t.name === name), { interval: 50 });
+    if (!updated) throw new Error(`[ensureToken] トークン "${name}" の更新確認に失敗`);
     return { token: updated, action: 'updated' };
   }
   set.addToken(type, name, String(value));
   await sleep(50);
-  const token = set.tokens.find(t => t.name === name);
+  const token = await storage.pollFind(() => set.tokens.find(t => t.name === name), { interval: 50 });
+  if (!token) throw new Error(`[ensureToken] トークン "${name}" の作成確認に失敗`);
   return { token, action: 'created' };
 };
 
@@ -217,8 +238,14 @@ storage.ensureTheme = async (group, name, sets) => {
   if (!theme) {
     catalog.addTheme(group, name);
     await sleep(100);
-    theme = storage.safeTokenThemes([]).find(t => t.name === name);
-    if (!theme) throw new Error(`[ensureTheme] テーマ "${name}" の作成に失敗`);
+    theme = await storage.pollFind(() => storage.safeTokenThemes([]).find(t => t.name === name));
+    if (!theme) {
+      const w = `[ensureTheme] テーマ "${name}" の作成確認に失敗（タイミング問題の可能性）`;
+      console.warn(w);
+      storage.__themeSetMap = storage.__themeSetMap || {};
+      storage.__themeSetMap[name] = sets.map(s => s.name);
+      return { theme: null, created: false, __warning: w };
+    }
     created = true;
   }
   for (const set of sets) {
@@ -325,13 +352,21 @@ storage.ensureSemanticTokens = async (opts) => {
   if (darkTokens.length > 0) await storage.ensureTokenBatch(dark, darkTokens);
 
   // 4. テーマ作成 + 永続切替
+  let themeWarning = null;
   if (!opts?.skipTheme) {
     await storage.ensureTheme('Appearance', 'Light', [shared, light]);
     await storage.ensureTheme('Appearance', 'Dark', [shared, dark]);
-    await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']);
+    try {
+      await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']);
+    } catch (e) {
+      themeWarning = `Theme persistence skipped (tokens registered OK): ${e.message}`;
+      console.warn(`[ensureSemanticTokens] ${themeWarning}`);
+    }
   }
 
-  return penpotUtils.tokenOverview();
+  const overview = penpotUtils.tokenOverview();
+  if (themeWarning) overview.__warning = themeWarning;
+  return overview;
 };
 
 storage.__wrappers.push(
