@@ -88,7 +88,7 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 | `storage.appendChild()` | `parent.appendChild()`+sleep+`layoutChild` | Flex/非Flex判定+sleep+layoutChild返却（null回避） |
 | `storage.createAndOpenPage()` | `penpot.createPage()`+`openPage()` | 切替検証・Page 1 再利用 |
 | `storage.connectLibrary()` | `penpot.library.connectLibrary()` | 返り値 name:null, components:[] 問題 |
-| `storage.toggleSetPersistent()` | `set.active = bool` | set.active は永続化されない（UI 自動化で回避） |
+| `storage.toggleSetPersistent()` | `set.active = bool` | set.active はセッション限定（永続化は UI 自動化経由） |
 | `storage.switchThemePersistent()` | （対応なし） | 複数セットの永続的テーマ切替 |
 
 > activate レスポンスにも同じ対応表が含まれる。
@@ -164,11 +164,14 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 
 一括登録:
 ```javascript
-await storage.ensureSemanticTokens();
+const result = await storage.ensureSemanticTokens();
 // カスタマイズ: await storage.ensureSemanticTokens({ overrides: { ... } })
 // Typography: await storage.ensureSemanticTokens({ includeTypography: true })
+return result;
 ```
 トークン一覧は `storage.SEMANTIC_TOKEN_DEFAULTS` で参照可能。
+
+Shared + Light セットがセッション内でアクティブ化される。テーマ定義が必要な場合は `storage.ensureTheme()` を別途呼び出す（WS 切断の可能性あり）。
 
 #### トークン登録パターン（個別登録）
 

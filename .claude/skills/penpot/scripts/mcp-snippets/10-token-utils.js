@@ -310,7 +310,6 @@ storage.SEMANTIC_TOKEN_DEFAULTS = {
  * デフォルトセマンティックトークンを一括登録。
  * opts.overrides: { 'accent-blue': { light: '#custom', dark: '#custom' } }
  * opts.force: boolean — 既存トークンも上書き（デフォルト false = 既存スキップ）
- * opts.skipTheme: boolean — テーマ作成・切替をスキップ
  * opts.includeTypography: boolean — fontSizes/fontWeights トークンも登録
  */
 storage.ensureSemanticTokens = async (opts) => {
@@ -318,10 +317,10 @@ storage.ensureSemanticTokens = async (opts) => {
   const force = opts?.force ?? false;
   const overrides = opts?.overrides ?? {};
 
-  // 1. セット作成
+  // 1. セット作成（Dark は activate しない — Light 優先）
   const { set: shared } = await storage.ensureTokenSet('Shared');
   const { set: light } = await storage.ensureTokenSet('Light');
-  const { set: dark } = await storage.ensureTokenSet('Dark');
+  const { set: dark } = await storage.ensureTokenSet('Dark', { activate: false });
 
   // 2. Shared トークン — 既存をフィルタしてバッチ投入
   const existingShared = new Set(shared.tokens.map(t => t.name));
@@ -351,22 +350,10 @@ storage.ensureSemanticTokens = async (opts) => {
   if (lightTokens.length > 0) await storage.ensureTokenBatch(light, lightTokens);
   if (darkTokens.length > 0) await storage.ensureTokenBatch(dark, darkTokens);
 
-  // 4. テーマ作成 + 永続切替
-  let themeWarning = null;
-  if (!opts?.skipTheme) {
-    await storage.ensureTheme('Appearance', 'Light', [shared, light]);
-    await storage.ensureTheme('Appearance', 'Dark', [shared, dark]);
-    try {
-      await storage.switchThemePersistent(['Shared', 'Light'], ['Dark']);
-    } catch (e) {
-      themeWarning = `Theme persistence skipped (tokens registered OK): ${e.message}`;
-      console.warn(`[ensureSemanticTokens] ${themeWarning}`);
-    }
-  }
+  // 4. Dark を明示的に deactivate（テーマ定義は行わない — WS 切断回避）
+  dark.active = false;
 
-  const overview = penpotUtils.tokenOverview();
-  if (themeWarning) overview.__warning = themeWarning;
-  return overview;
+  return penpotUtils.tokenOverview();
 };
 
 storage.__wrappers.push(
@@ -379,7 +366,7 @@ storage.__wrappers.push(
   { fn: 'await storage.applyTokenToShapesSafe(name, shapes[], props[])', replaces: 'token.applyToShapes()', reason: '一括適用' },
   { fn: 'storage.findToken(name) / findTokenOrNull(name)', replaces: 'penpotUtils.findTokenByName()', reason: 'エラーヒント付き検索' },
   { fn: 'storage.ensureTheme(group, name, sets[])', replaces: 'catalog.addTheme()+find()+addSet()', reason: '冪等テーマ作成+セット関連付け（addSet はセッション限定）' },
-  { fn: 'await storage.ensureSemanticTokens(opts?)', replaces: null, reason: 'デフォルト14色+spacing+borderRadius一括登録（force/overrides/skipTheme/includeTypography）' },
+  { fn: 'await storage.ensureSemanticTokens(opts?)', replaces: null, reason: 'デフォルト14色+spacing+borderRadius一括登録（force/overrides/includeTypography）' },
   { fn: 'storage.SEMANTIC_TOKEN_DEFAULTS', replaces: null, reason: 'デフォルトトークン定数（shared/colors/typography）' },
   { fn: 'storage.VALID_TOKEN_TYPES', replaces: null, reason: '有効なトークンタイプ一覧' },
   { fn: 'storage.TOKEN_PROPERTY_MAP', replaces: null, reason: 'トークンタイプ→プロパティ対応表' },

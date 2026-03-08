@@ -62,12 +62,49 @@ let upstream = null; // Client instance
 let unlocked = false;
 let initDone = false;
 
+// --- Error text extraction (MCP SDK returns content without isError) ---
+function getResultErrorText(result) {
+  const text = result?.content?.find(c => c.type === "text")?.text;
+  if (!text) return null;
+  // Upstream wraps errors as "Tool execution failed: Error: ..." or "Error handling task: ..."
+  if (text.startsWith("Tool execution failed:") || text.startsWith("Error handling task:")) return text;
+  return null;
+}
+
+// --- Pattern matchers (shared between result-based and exception-based detection) ---
+function matchesStorageUninit(text) {
+  return text.includes("storage.") && text.includes("is not a function");
+}
+function matchesPluginDisconnected(text) {
+  return text.includes("No Penpot plugin instances") || text.includes("not currently connected");
+}
+
 // --- Storage uninit detection (WS reconnect causes empty storage) ---
 function isStorageUninitError(result) {
-  if (!result?.isError) return false;
-  const text = result.content?.find(c => c.type === "text")?.text;
-  if (!text) return false;
-  return text.includes("storage.") && text.includes("is not a function");
+  const text = getResultErrorText(result);
+  return text ? matchesStorageUninit(text) : false;
+}
+
+// --- Plugin disconnected detection ---
+function isPluginDisconnected(result) {
+  const text = getResultErrorText(result);
+  return text ? matchesPluginDisconnected(text) : false;
+}
+
+// --- Wait for plugin reconnection (mcp-connect auto-reconnects) ---
+async function waitForPluginReconnect(maxWait = 30000, interval = 2000) {
+  const deadline = Date.now() + maxWait;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, interval));
+    try {
+      const probe = await upstream.callTool({
+        name: INIT_TOOL,
+        arguments: { code: "return 'ok'" },
+      });
+      if (!isPluginDisconnected(probe)) return true;
+    } catch { /* upstream error, keep waiting */ }
+  }
+  return false;
 }
 
 // --- Upstream connection (new or reconnect) ---
@@ -176,7 +213,7 @@ async function autoInit(force = false) {
       name: INIT_TOOL,
       arguments: { code },
     });
-    if (result.isError) return result;
+    if (getResultErrorText(result)) return result;
     lastResult = result;
   }
   initDone = true;
@@ -187,7 +224,7 @@ async function autoInit(force = false) {
 function formatInitResult(initResult) {
   if (!initResult) return "";
   const initText = initResult.content?.find((c) => c.type === "text")?.text;
-  if (initResult.isError)
+  if (getResultErrorText(initResult))
     return `\n\n⚠ 初期化エラー:\n${initText || "不明"}`;
   return initText ? `\n\n${initText}` : "";
 }
@@ -443,11 +480,23 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   try {
     const result = await upstream.callTool({ name, arguments: args });
     // storage メソッド消失検出: WS 再接続で storage が空になった場合、init 再実行で復旧
-    if (name === INIT_TOOL && isStorageUninitError(result)) {
-      console.error("[mcp-proxy] storage uninit detected, re-running autoInit");
+    if (isStorageUninitError(result)) {
+      console.error("[mcp-proxy] storage uninit detected, re-running autoInit + retry");
       const initResult = await autoInit(true);
-      if (initResult?.isError) return initResult;
+      if (initResult && getResultErrorText(initResult)) return initResult;
       return await upstream.callTool({ name, arguments: args });
+    }
+    // プラグイン切断検出: mcp-connect の自動再接続を待機 → autoInit → リトライ
+    if (isPluginDisconnected(result)) {
+      console.error("[mcp-proxy] plugin disconnected, waiting for auto-reconnect...");
+      const reconnected = await waitForPluginReconnect(60000, 3000);
+      if (reconnected) {
+        console.error("[mcp-proxy] plugin reconnected, re-running autoInit + retry");
+        const initResult = await autoInit(true);
+        if (initResult && getResultErrorText(initResult)) return initResult;
+        return await upstream.callTool({ name, arguments: args });
+      }
+      console.error("[mcp-proxy] plugin reconnect timed out");
     }
     return result;
   } catch (e) {
@@ -457,13 +506,47 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     initDone = false;
     if (stale) { try { await stale.close(); } catch {} }
 
-    // Gate mode: fast-fail (1回) → AI が activate で再接続判断
-    // Transparent mode: サーバ側リトライ
-    try {
-      await reconnectOnce(!GATE_ENABLED);
-      return await upstream.callTool({ name, arguments: args });
-    } catch (reconnectErr) {
-      upstream = null;
+    // プラグイン切断検出: mcp-connect の自動再接続を待機 → autoInit → リトライ
+    console.error(`[mcp-proxy] catch: ${e.message?.substring(0, 150)}`);
+    const errText = e.message || "";
+    const isPluginErr = matchesPluginDisconnected(errText);
+    const isStorageErr = matchesStorageUninit(errText);
+    if (isStorageErr) {
+      console.error("[mcp-proxy] storage uninit (thrown), reconnecting + autoInit");
+      try {
+        if (!upstream) upstream = await connectWithRetry();
+        const initResult = await autoInit(true);
+        if (initResult && getResultErrorText(initResult)) return initResult;
+        return await upstream.callTool({ name, arguments: args });
+      } catch (reconnectErr) {
+        console.error("[mcp-proxy] storage recovery failed:", reconnectErr.message);
+        upstream = null;
+      }
+    } else if (isPluginErr) {
+      console.error("[mcp-proxy] plugin disconnected (thrown), waiting for auto-reconnect...");
+      try {
+        if (!upstream) upstream = await connectWithRetry();
+        const reconnected = await waitForPluginReconnect(60000, 3000);
+        if (reconnected) {
+          console.error("[mcp-proxy] plugin reconnected, re-running autoInit + retry");
+          const initResult = await autoInit(true);
+          if (initResult && getResultErrorText(initResult)) return initResult;
+          return await upstream.callTool({ name, arguments: args });
+        } else {
+          console.error("[mcp-proxy] plugin reconnect timed out");
+        }
+      } catch (reconnectErr) {
+        console.error("[mcp-proxy] reconnect failed:", reconnectErr.message);
+        upstream = null;
+      }
+    } else {
+      // 通常の upstream 切断: fast-fail or リトライ
+      try {
+        await reconnectOnce(!GATE_ENABLED);
+        return await upstream.callTool({ name, arguments: args });
+      } catch (reconnectErr) {
+        upstream = null;
+      }
     }
 
     return {

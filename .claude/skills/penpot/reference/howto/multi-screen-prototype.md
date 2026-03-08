@@ -34,6 +34,7 @@ return penpotUtils.tokenOverview();
 - 既存トークンは自動スキップ（`force: true` で上書き可能）
 - トークン一覧は `storage.SEMANTIC_TOKEN_DEFAULTS` で参照可能
 - 個別にトークンを登録したい場合は [token-registration.md](token-registration.md) を参照
+- テーマ定義は自動作成され、Shared + Light がセッション内でアクティブ化される（WS 切断なし）
 
 ---
 

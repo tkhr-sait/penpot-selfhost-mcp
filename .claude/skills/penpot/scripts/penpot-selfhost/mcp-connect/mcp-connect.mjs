@@ -66,7 +66,8 @@ const PLUGIN_ACTION_TIMEOUT = 15_000;
 const LOGIN_RETRY_INTERVAL = 5000;
 const LOGIN_RETRY_TIMEOUT = 300_000;
 const MONITOR_INTERVAL = 5000;       // Plugin connection check interval
-const RECONNECT_COOLDOWN = 30000;    // Cooldown after reconnect
+// toggle-set はプラグイン切断を引き起こす可能性がある — 自動再接続はモニターが処理
+const RECONNECT_COOLDOWN = 5000;     // Cooldown after reconnect
 
 // ---------------------------------------------------------------------------
 // Helpers
