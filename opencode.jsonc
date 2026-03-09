@@ -12,6 +12,7 @@
     "skill": "allow",
     "task": {
       "*": "ask",
+      "penpot": "allow",
       "penpot-mcp": "allow"
     },
     "edit": "ask",
@@ -203,13 +204,34 @@
     }
   },
   "agent": {
+    "penpot": {
+      "description": "Penpot デザイン操作。環境セットアップ、デザインシステム構築、UI/UX デザイン作成、トークン同期、レビュー、コメント操作。@penpot で呼び出し。",
+      "mode": "subagent",
+      "prompt": "{file:.claude/skills/penpot/SKILL.md}",
+      "tools": {
+        "penpot-official_*": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "bash": true,
+        "skill": false,
+        "edit": false
+      },
+      "permission": {
+        "task": {
+          "penpot-mcp": "allow"
+        }
+      }
+    },
     "penpot-mcp": {
-      "description": "Penpot MCP 操作の実行。ボード作成、テキスト配置、スタイル適用、トークン操作、デザイン検証など、複数の execute_code 呼び出しが必要なデザイン操作を委譲。前提: /penpot スキル（SKILL.md）のロード後にのみ使用。直接呼び出し禁止。",
+      "description": "Penpot MCP 操作の実行。ボード作成、テキスト配置、スタイル適用、トークン操作、デザイン検証など、複数の execute_code 呼び出しが必要なデザイン操作を委譲。前提: penpot スキル（SKILL.md）のロード後にのみ使用。",
       "mode": "subagent",
       "prompt": "{file:.claude/agents/penpot-mcp.md}",
       "tools": {
         "penpot-official_*": true,
         "read": true,
+        "glob": true,
+        "grep": true,
         "edit": false
       }
     }

@@ -9,7 +9,8 @@ argument-hint: "[起動|停止|デザイン|デザインシステム|アプリ�
 
 # Penpot MCP Integration
 
-$ARGUMENTS に応じてルーティングし、必要なリファレンスを Read して実行する。
+ユーザーのリクエスト内容に応じてルーティングし、必要なリファレンスを Read して実行する。
+Claude Code では $ARGUMENTS、OpenCode ではスキルロード時のユーザーメッセージが対象。
 
 ## ツール名規約
 
@@ -30,7 +31,9 @@ $ARGUMENTS に応じてルーティングし、必要なリファレンスを Re
 
 ## ルーティングマップ
 
-| $ARGUMENTS キーワード | セクション | 実行 | Read |
+> リファレンスパスは本スキルディレクトリ（`.claude/skills/penpot/`）からの相対パス。
+
+| キーワード | セクション | 実行 | Read |
 |---|---|---|---|
 | なし / 起動 / 設定 / 利用可能にして | [環境セットアップ](#環境セットアップ) | 親AI直接 | [selfhost.md](reference/core/selfhost.md) |
 | 停止 / down / status / ログ | 環境セットアップ（コマンド実行） | 親AI直接 | — |
@@ -173,7 +176,7 @@ MCP 操作（`execute_code` 等）は penpot-mcp サブエージェントに委�
 | プラットフォーム | 委譲方法 |
 |---|---|
 | Claude Code | Agent ツール（`subagent_type: "penpot-mcp"`） |
-| opencode | `@penpot-mcp`（`opencode.jsonc` の agent 設定に定義済み） |
+| opencode | Task ツール（`subagent_type: "penpot-mcp"`）or `@penpot-mcp` |
 | VS Code Copilot | `agent` ツール経由(`@penpot-mcp`) |
 
 **重要**: `activate` はサブエージェントが自身で呼び出す（親AIの初期化状態は引き継がれない）。委譲時に「activate 不要」「初期化済み」等の指示を含めないこと。

@@ -3,7 +3,7 @@ name: penpot-mcp
 description: >-
   Penpot MCP 操作の実行。ボード作成、テキスト配置、スタイル適用、トークン操作、
   デザイン検証など、複数の execute_code 呼び出しが必要なデザイン操作を委譲。
-  前提: /penpot スキル（SKILL.md）のロード後にのみ使用。直接呼び出し禁止。
+  前提: penpot スキル（SKILL.md）のロード後にのみ使用。
 tools:
   - mcp__penpot-official__activate
   - mcp__penpot-official__execute_code
@@ -16,20 +16,20 @@ tools:
 model: inherit
 ---
 
-> **ツール名について**: 上記 `tools:` 一覧は Claude Code 固有の命名（`mcp__<server>__<tool>`）。他プラットフォームでは同等ツールが異なる命名で提供される（例: opencode では `penpot-official_<tool>`）。本文中は短縮名で参照する。
+> **ツール名について**: 上記 `tools:` 一覧は Claude Code の命名形式。プラットフォームごとにプレフィックスが異なる（opencode: `penpot-official_<tool>` 等）。リファレンス・本文中は短縮名（`activate`, `execute_code` 等）で参照する。
 
 Penpot MCP 操作の実行エージェント。
 
 ## 前提条件（ランタイムガード）
 
-このエージェントは `/penpot` スキル（SKILL.md）のロード後にのみ使用すること。
+このエージェントは penpot スキル（SKILL.md）のロード後にのみ使用すること。
 
 **呼び出し元のプロンプトに以下が含まれていない場合、作業を開始せずエラーサマリを返すこと:**
 - デザイン仕様（カラー、レイアウト、テキスト内容など）
 - 具体的な成果物定義（何を作るか）
 
 スキル未ロードと判断した場合のレスポンス:
-- **エラー**: スキル未ロード検出。`/penpot` スキルをロードし、SKILL.md のルーティングマップに従ってリファレンスを Read してから再呼び出ししてください。
+- **エラー**: スキル未ロード検出。penpot スキルをロードし、SKILL.md のルーティングマップに従ってリファレンスを Read してから再呼び出ししてください。
 
 ## 初期化
 

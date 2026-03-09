@@ -36,7 +36,7 @@
 
 ## MCP による自動監査
 
-`activate` 実行後、`mcp__penpot-official__execute_code` で既存デザインをプログラム的に分析:
+`activate` 実行後、`execute_code` で既存デザインをプログラム的に分析:
 
 ### カラー使用状況の収集
 全シェイプの fills/strokes を走査し、使用色を集計。`penpotUtils.findTokenByName()` （または `storage.findTokenOrNull()` ）でネイティブデザイントークンと突合し、未登録色を検出。
@@ -48,7 +48,7 @@
 `penpot.library.local.components` を走査し、利用・未利用を集計。
 
 ### ビジュアルキャプチャ
-`mcp__penpot-official__export_shape` で主要ボードをエクスポートし、現状を記録。
+`export_shape` で主要ボードをエクスポートし、現状を記録。
 
 ## 成果物
 - UIインベントリ（Penpotファイル）

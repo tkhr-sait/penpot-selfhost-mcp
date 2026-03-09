@@ -35,8 +35,8 @@ Penpot MCP でのUI/UXデザイン作成に関するワークフロー、デザ�
 
 ### Phase 3: 実装
 
-Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作成する。
-`mcp__penpot-official__activate` で storage ラッパーが自動初期化される。
+Penpot MCP (`execute_code`) を使ってデザインを作成する。
+`activate` で storage ラッパーが自動初期化される。
 下記の「実装ルール」とデザイン原則に従って作成する。
 
 **大規模デザインの実装戦略:**
@@ -46,7 +46,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 
 ### Phase 4: レビュー
 
-1. `mcp__penpot-official__export_shape` でデザインをPNGエクスポート
+1. `export_shape` でデザインをPNGエクスポート
 2. エクスポート結果を確認し、問題があれば修正
 3. ユーザーに結果を共有し、フィードバックを求める
 
@@ -108,7 +108,7 @@ Penpot MCP (`mcp__penpot-official__execute_code`) を使ってデザインを作
 - 詳細は [mcp-api.md](mcp-api.md) と [library-architecture.md](library-architecture.md) を参照
 
 ### API 制約
-- MCP システムプロンプト（`mcp__penpot-official__high_level_overview`）を必ず遵守（insertChild、growType、Flex順序等）
+- MCP システムプロンプト（`high_level_overview`）を必ず遵守（insertChild、growType、Flex順序等）
 
 ## テーマ切替戦略
 

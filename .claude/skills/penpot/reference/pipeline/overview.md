@@ -80,12 +80,12 @@ Lost Pixel（ビジュアルリグレッションテスト）
 
 | 操作 | ツール | 説明 |
 |------|--------|------|
-| トークンエクスポート | `mcp__penpot-official__execute_code` → `storage.exportTokensDTCG()` | Penpot → DTCG JSON |
-| トークンインポート | `mcp__penpot-official__execute_code` → `await storage.importTokensDTCG(json)` | JSON → Penpot（バッチ処理） |
-| インポート再開 | `mcp__penpot-official__execute_code` → `await storage.resumeImport()` | 中断からの再開 |
-| SD 設定生成 | `mcp__penpot-official__execute_code` → `storage.generateStyleDictionaryConfig()` | Style Dictionary 設定テンプレート |
+| トークンエクスポート | `execute_code` → `storage.exportTokensDTCG()` | Penpot → DTCG JSON |
+| トークンインポート | `execute_code` → `await storage.importTokensDTCG(json)` | JSON → Penpot（バッチ処理） |
+| インポート再開 | `execute_code` → `await storage.resumeImport()` | 中断からの再開 |
+| SD 設定生成 | `execute_code` → `storage.generateStyleDictionaryConfig()` | Style Dictionary 設定テンプレート |
 | SD ビルド | Bash → `npm run tokens:build` | CSS変数/SCSS/Tailwind 生成 |
-| コンポーネント一覧 | `mcp__penpot-official__execute_code` → `penpot.library.local.components` | Storybook スキャフォールド用 |
+| コンポーネント一覧 | `execute_code` → `penpot.library.local.components` | Storybook スキャフォールド用 |
 
 これらは `activate` 時に自動初期化される。
 

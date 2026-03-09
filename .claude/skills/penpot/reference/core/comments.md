@@ -8,7 +8,7 @@
 ## レビューワークフロー
 
 1. 下記「ボード・シェイプ取得」でレビュー対象のボードを特定
-2. `mcp__penpot-official__export_shape` で対象ボードを PNG エクスポート
+2. `export_shape` で対象ボードを PNG エクスポート
 3. 下記「UI/UX チェックリスト」で評価し、指摘事項を洗い出す
 4. 「コメント作成」セクションの手順で指摘をコメント登録
 5. 「コメント取得」で登録結果を確認し、ユーザーにサマリを共有
@@ -26,7 +26,7 @@ return ctx;
 // → { page: { id, name }, boards: [{ id, name, width, height }, ...] }
 ```
 
-`boards[].id` を `mcp__penpot-official__export_shape` の `shapeId` に渡す。
+`boards[].id` を `export_shape` の `shapeId` に渡す。
 
 ### ボード内シェイプの検索
 

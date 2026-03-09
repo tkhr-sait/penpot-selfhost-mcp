@@ -14,7 +14,7 @@ services:
       - ../mcp-snippets:/app/init-scripts:ro
     environment:
       MCP_NAME: penpot-official
-      MCP_SKILL: /penpot
+      MCP_SKILL: penpot
       MCP_TOOLS: execute_code,export_shape,penpot_api_info,high_level_overview
       MCP_INIT_DIR: /app/init-scripts
       MCP_INIT_TOOL: execute_code

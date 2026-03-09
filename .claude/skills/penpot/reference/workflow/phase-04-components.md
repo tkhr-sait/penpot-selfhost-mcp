@@ -36,7 +36,7 @@
 6. `component.transformInVariant()` でバリアント化
 7. `variant.addVariant()` / `variant.addProperty()` でバリエーション追加
 8. `return storage.validateDesign()` でフォント・テキスト検証
-9. `mcp__penpot-official__export_shape` で各バリアントを確認
+9. `export_shape` で各バリアントを確認
 
 ## 成果物
 - コンポーネントライブラリ（Penpot Components）

@@ -32,7 +32,7 @@
 - Rectangle（グレー塗り）でプレースホルダー配置
 - `storage.createText()` でラベル・見出し配置
 - `storage.spacing` を基準にグリッド準拠のスペーシング適用
-- `mcp__penpot-official__export_shape` で確認
+- `export_shape` で確認
 
 ## 成果物
 - ラフスケッチ集

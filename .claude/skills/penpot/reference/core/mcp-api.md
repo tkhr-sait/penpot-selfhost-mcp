@@ -12,7 +12,7 @@ Plugin iframe (execute_code) --fetch--> Bridge Server (:3000) --cookie auth--> P
                                               ↑ mcp-connect コンテナ内
 ```
 
-- **MCP Server**: LLMクライアント向けツール提供（`mcp__penpot-official__execute_code`, `mcp__penpot-official__export_shape`, `mcp__penpot-official__penpot_api_info` 等）
+- **MCP Server**: LLMクライアント向けツール提供（`execute_code`, `export_shape`, `penpot_api_info` 等）
 - **Penpot Plugin**: WebSocket経由でサーバーと通信、Plugin API を公開
 - **Plugin API**: Penpotの設計操作（シェイプ作成・変更・削除、レイアウト制御等）を実行
 
@@ -22,11 +22,11 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 
 | ツール | 用途 |
 |--------|------|
-| `mcp__penpot-official__activate` | セッション開始/再接続（storage ラッパー自動初期化） |
-| `mcp__penpot-official__execute_code` | Plugin API 環境でJavaScriptを実行 |
-| `mcp__penpot-official__export_shape` | シェイプをPNG/SVGでエクスポート（視覚確認） |
-| `mcp__penpot-official__penpot_api_info` | API型定義・メンバー情報を取得 |
-| `mcp__penpot-official__high_level_overview` | Plugin API の概要 |
+| `activate` | セッション開始/再接続（storage ラッパー自動初期化） |
+| `execute_code` | Plugin API 環境でJavaScriptを実行 |
+| `export_shape` | シェイプをPNG/SVGでエクスポート（視覚確認） |
+| `penpot_api_info` | API型定義・メンバー情報を取得 |
+| `high_level_overview` | Plugin API の概要 |
 
 > **注意**: `activate` 以外の全ツールは `activate` 呼び出し前はエラーを返す。
 
@@ -71,7 +71,7 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 
 **判断基準**: storage にラッパーがあればそちらを使う。ネイティブ直接呼び出しはバグ回避策が無効化されるため禁止。
 
-各層の詳細は `mcp__penpot-official__high_level_overview` ツールで取得可能。型情報は `mcp__penpot-official__penpot_api_info` ツールで確認。
+各層の詳細は `high_level_overview` ツールで取得可能。型情報は `penpot_api_info` ツールで確認。
 
 **注意**: `penpot.library.connectLibrary()` の返り値は不完全な場合がある（`name: null`, `components: []`）。
 `storage.connectLibrary(id)` ラッパーを使うか、接続後に `penpot.library.connected.find(l => l.id === id)` で再取得すること。
@@ -248,7 +248,7 @@ Shared + Light セットがセッション内でアクティブ化される。�
   - OpenOverlay: `addInteraction` が `undefined` を返し保存されない
   - ToggleOverlay: 同上
   - **回避策**: `navigate-to` で設定後、Penpot UI で手動で OpenOverlay に変更
-- API 型は `mcp__penpot-official__penpot_api_info` で確認
+- API 型は `penpot_api_info` で確認
 
 ### コード生成（ハンドオフ）
 
@@ -265,7 +265,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 - トークン値の取得: `storage.findToken(name)` — 未登録ならエラーに登録済み名を含む
 
 ### 全般
-- `mcp__penpot-official__high_level_overview` の API 仕様を遵守（insertChild、growType、Flex順序等）
+- `high_level_overview` の API 仕様を遵守（insertChild、growType、Flex順序等）
 - 完了後の検証: `return storage.validateDesign()` で制約違反を検出
 
 ### よくあるハマりポイント
@@ -303,7 +303,7 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 - `storage.api(command, params, timeout)` でタイムアウト付き呼び出し（デフォルト10秒）
 - `storage.api(command, params, timeout)` でタイムアウト付き呼び出し（activate 時に自動初期化済み）
 - ファイル一覧: `get-project-files`（`get-files` は存在しない）
-- `mcp__penpot-official__execute_code` から REST API を呼ぶ際は、mcp-connect コンテナ内のブリッジサーバー (port 3000) の `/api-proxy` を経由する。ブラウザセッションの Cookie が自動付与されるため、プラグイン側で認証情報を持つ必要がない。詳細は [selfhost.md の mcp-connect ブリッジサーバー](selfhost.md#mcp-connect-ブリッジサーバー) を参照
+- `execute_code` から REST API を呼ぶ際は、mcp-connect コンテナ内のブリッジサーバー (port 3000) の `/api-proxy` を経由する。ブラウザセッションの Cookie が自動付与されるため、プラグイン側で認証情報を持つ必要がない。詳細は [selfhost.md の mcp-connect ブリッジサーバー](selfhost.md#mcp-connect-ブリッジサーバー) を参照
 
 ### update-file チェンジタイプ一覧
 

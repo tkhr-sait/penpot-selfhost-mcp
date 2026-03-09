@@ -199,7 +199,7 @@ const result = storage.validateDesign();
 return result;
 ```
 
-`mcp__penpot-official__export_shape` ツールで PNG エクスポート:
+`export_shape` ツールで PNG エクスポート:
 - `shapeId`: ボード ID または `'selection'`
 - `format`: `'png'`（scale 1.5 推奨 → 2100x1500 相当）
 
