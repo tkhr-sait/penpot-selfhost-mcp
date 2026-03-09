@@ -11,8 +11,11 @@ set -eu
 INDEX_HTML="/var/www/app/index.html"
 
 # --- IME Fix Patch ---
-# Env: PENPOT_PATCH_IME_FIX (default: true)
-if [ "${PENPOT_PATCH_IME_FIX:-true}" = "true" ]; then
+# PENPOT_FIX_TYPE: "build" = source-patched image, skip runtime patch
+# PENPOT_PATCH_IME_FIX: "true" (default) = apply runtime JS patch
+if [ "${PENPOT_FIX_TYPE:-}" = "build" ]; then
+  echo "[patch] Source-patched build, skipping runtime IME fix."
+elif [ "${PENPOT_PATCH_IME_FIX:-true}" = "true" ]; then
   PATCH_SRC="/opt/patches/ime-fix.js"
   PATCH_DST="/var/www/app/js/ime-fix.js"
   if [ -f "$PATCH_SRC" ]; then
@@ -20,7 +23,7 @@ if [ "${PENPOT_PATCH_IME_FIX:-true}" = "true" ]; then
     if ! grep -q 'ime-fix.js' "$INDEX_HTML" 2>/dev/null; then
       sed -i 's|</body>|<script src="/js/ime-fix.js"></script></body>|' "$INDEX_HTML"
     fi
-    echo "[patch] IME fix applied."
+    echo "[patch] IME fix applied (runtime)."
   else
     echo "[patch] WARNING: ime-fix.js not found at $PATCH_SRC, skipping."
   fi

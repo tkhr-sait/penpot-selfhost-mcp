@@ -1,0 +1,334 @@
+diff --git a/frontend/src/app/main/ui/comments.cljs b/frontend/src/app/main/ui/comments.cljs
+index 1ea7ab7..7698ae8 100644
+--- a/frontend/src/app/main/ui/comments.cljs
++++ b/frontend/src/app/main/ui/comments.cljs
+@@ -165,6 +165,7 @@
+         local-ref      (mf/use-ref nil)
+         mentions-s     (mf/use-ctx mentions-context)
+         cur-mention    (mf/use-var nil)
++        composing*     (mf/use-state false)
+ 
+         prev-selection-ref
+         (mf/use-ref)
+@@ -333,15 +334,22 @@
+                  (dom/set-html! span-node (str/concat node-text at-symbol))
+                  (wapi/set-cursor-after! span-node))))))
+ 
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         handle-key-down
+         (mf/use-fn
+          (mf/deps on-esc on-ctrl-enter handle-select handle-input)
+          (fn [event]
+-           (handle-select event)
+-           (when-let [node (mf/ref-val local-ref)]
+-             (when-let [[span-node offset] (current-text-node node)]
+-               (cond
+-                 (and @cur-mention (kbd/enter? event))
++           (when-not @composing*
++             (handle-select event)
++             (when-let [node (mf/ref-val local-ref)]
++               (when-let [[span-node offset] (current-text-node node)]
++                 (cond
++                   (and @cur-mention (kbd/enter? event))
+                  (do (dom/prevent-default event)
+                      (dom/stop-propagation event)
+                      (rx/push! mentions-s {:type :insert-selected-mention}))
+@@ -389,7 +397,7 @@
+                               (= offset 1))
+                      (dom/prevent-default event)
+                      (dom/stop-propagation event)
+-                     (.remove prev-node))))))))]
++                     (.remove prev-node)))))))))]
+ 
+     (mf/with-layout-effect [autofocus]
+       (when ^boolean autofocus
+@@ -444,6 +452,8 @@
+       :on-input handle-input
+       :ref init-input
+       :on-key-down handle-key-down
++      :on-composition-start on-composition-start
++      :on-composition-end on-composition-end
+       :on-focus handle-focus
+       :on-blur handle-blur}]))
+ 
+diff --git a/frontend/src/app/main/ui/components/color_input.cljs b/frontend/src/app/main/ui/components/color_input.cljs
+index 10e6a49..a31457d 100644
+--- a/frontend/src/app/main/ui/components/color_input.cljs
++++ b/frontend/src/app/main/ui/components/color_input.cljs
+@@ -38,6 +38,7 @@
+ 
+         ;; We need to store the handle-blur ref so we can call it on unmount
+         dirty-ref        (mf/use-ref false)
++        composing*       (mf/use-state false)
+ 
+         parse-value
+         (mf/use-fn
+@@ -66,24 +67,31 @@
+              (when on-change (on-change new-value))
+              (update-input new-value))))
+ 
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         handle-key-down
+         (mf/use-fn
+          (mf/deps apply-value update-input)
+          (fn [event]
+-           (mf/set-ref-val! dirty-ref true)
+-           (let [input-node (mf/ref-val ref)]
+-             (cond
+-               (kbd/enter? event)
+-               (let [value (parse-value)]
+-                 (update-input value)
+-                 (dom/prevent-default event)
+-                 (dom/blur! input-node))
+-
+-               (kbd/esc? event)
+-               (do
+-                 (update-input value)
+-                 (dom/prevent-default event)
+-                 (dom/blur! input-node))))))
++           (when-not @composing*
++             (mf/set-ref-val! dirty-ref true)
++             (let [input-node (mf/ref-val ref)]
++               (cond
++                 (kbd/enter? event)
++                 (let [value (parse-value)]
++                   (update-input value)
++                   (dom/prevent-default event)
++                   (dom/blur! input-node))
++
++                 (kbd/esc? event)
++                 (do
++                   (update-input value)
++                   (dom/prevent-default event)
++                   (dom/blur! input-node)))))))
+ 
+         on-click
+         (mf/use-fn
+@@ -132,7 +140,9 @@
+                           :default-value value
+                           :on-key-down handle-key-down
+                           :on-blur handle-blur
+-                          :on-focus handle-focus})]
++                          :on-focus handle-focus
++                          :on-composition-start on-composition-start
++                          :on-composition-end on-composition-end})]
+ 
+     (mf/with-effect [value]
+       (when-let [node (mf/ref-val ref)]
+diff --git a/frontend/src/app/main/ui/components/forms.cljs b/frontend/src/app/main/ui/components/forms.cljs
+index 0e6c558..69c29cb 100644
+--- a/frontend/src/app/main/ui/components/forms.cljs
++++ b/frontend/src/app/main/ui/components/forms.cljs
+@@ -460,6 +460,7 @@
+                           []))))
+ 
+         value      (mf/use-state "")
++        composing* (mf/use-state false)
+         result     (hooks/use-equal-memo @items)
+ 
+         empty?     (and (str/empty? @value)
+@@ -498,13 +499,20 @@
+            (let [value (str/join " " (map :text items))]
+              (fm/update-input-value! form input-name value))))
+ 
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         on-key-down
+         (mf/use-fn
+          (mf/deps @value)
+          (fn [event]
+-           (let [val (cond-> @value trim str/trim)]
+-             (cond
+-               (or (kbd/enter? event) (kbd/comma? event) (kbd/space? event))
++           (when-not @composing*
++             (let [val (cond-> @value trim str/trim)]
++               (cond
++                 (or (kbd/enter? event) (kbd/comma? event) (kbd/space? event))
+                (do
+                  (dom/prevent-default event)
+                  (dom/stop-propagation event)
+@@ -534,7 +542,7 @@
+                (do
+                  (dom/prevent-default event)
+                  (dom/stop-propagation event)
+-                 (swap! items (fn [items] (if (c/empty? items) items (pop items)))))))))
++                 (swap! items (fn [items] (if (c/empty? items) items (pop items))))))))))
+ 
+         on-blur
+         (mf/use-fn
+@@ -569,6 +577,8 @@
+               :on-focus on-focus
+               :on-blur on-blur
+               :on-key-down on-key-down
++              :on-composition-start on-composition-start
++              :on-composition-end on-composition-end
+               :value @value
+               :on-change on-change
+               :placeholder (when empty? label)}]
+diff --git a/frontend/src/app/main/ui/ds/controls/combobox.cljs b/frontend/src/app/main/ui/ds/controls/combobox.cljs
+index f8fcc56..68c541b 100644
+--- a/frontend/src/app/main/ui/ds/controls/combobox.cljs
++++ b/frontend/src/app/main/ui/ds/controls/combobox.cljs
+@@ -62,6 +62,7 @@
+         options-ref  (mf/use-ref nil)
+         listbox-id   (mf/use-id)
+         value-ref    (mf/use-ref nil)
++        composing*   (mf/use-state false)
+ 
+         dropdown-options
+         (mf/with-memo [options filter-id]
+@@ -142,13 +143,20 @@
+            (when-not disabled
+              (dom/select-text! (.-target event)))))
+ 
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         on-input-key-down
+         (mf/use-fn
+          (mf/deps is-open focused-id disabled)
+          (fn [event]
+            (dom/stop-propagation event)
+            (when-not disabled
+-             (let [options (mf/ref-val options-ref)
++             (when-not @composing*
++               (let [options (mf/ref-val options-ref)
+                    len     (count options)
+                    index   (d/index-of-pred options #(= focused-id (get % :id)))
+                    index   (d/nilv index -1)
+@@ -192,7 +200,7 @@
+                    (reset! is-open* true)
+ 
+                    (or (kbd/esc? event) (kbd/enter? event))
+-                   (dom/blur! (mf/ref-val input-ref))))))))
++                   (dom/blur! (mf/ref-val input-ref)))))))))
+ 
+         on-input-change
+         (mf/use-fn
+@@ -264,7 +272,9 @@
+                 :on-change on-input-change
+                 :on-click on-input-click
+                 :on-focus on-input-focus
+-                :on-key-down on-input-key-down}]]
++                :on-key-down on-input-key-down
++                :on-composition-start on-composition-start
++                :on-composition-end on-composition-end}]]
+ 
+       (when (d/not-empty? options)
+         [:button {:type "button"
+diff --git a/frontend/src/app/main/ui/ds/controls/numeric_input.cljs b/frontend/src/app/main/ui/ds/controls/numeric_input.cljs
+index 518d98a..4767e7d 100644
+--- a/frontend/src/app/main/ui/ds/controls/numeric_input.cljs
++++ b/frontend/src/app/main/ui/ds/controls/numeric_input.cljs
+@@ -368,6 +368,14 @@
+                (when (fn? on-change)
+                  (on-change (get-token-op tokens name)))))))
+ 
++        composing*      (mf/use-state false)
++
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         store-raw-value
+         (mf/use-fn
+          (fn [event]
+@@ -436,8 +444,9 @@
+         (mf/use-fn
+          (mf/deps is-open apply-value update-input is-open focused-id handle-focus-change)
+          (fn [event]
+-           (mf/set-ref-val! dirty-ref true)
+-           (let [up?          (kbd/up-arrow? event)
++           (when-not @composing*
++             (mf/set-ref-val! dirty-ref true)
++             (let [up?          (kbd/up-arrow? event)
+                  down?        (kbd/down-arrow? event)
+                  enter?       (kbd/enter? event)
+                  esc?         (kbd/esc? event)
+@@ -506,7 +515,7 @@
+                        new-val (decrement current-value step min max)]
+                    (dom/prevent-default event)
+                    (update-input (fmt/format-number new-val))
+-                   (apply-value (dm/str new-val))))))))
++                   (apply-value (dm/str new-val)))))))))
+ 
+         on-focus
+         (mf/use-fn
+@@ -630,6 +639,8 @@
+                                 :default-value (or (mf/ref-val last-value*) (fmt/format-number value))
+                                 :on-blur on-blur
+                                 :on-key-down on-key-down
++                                :on-composition-start on-composition-start
++                                :on-composition-end on-composition-end
+                                 :on-focus on-focus
+                                 :on-change store-raw-value
+                                 :variant "comfortable"
+diff --git a/frontend/src/app/main/ui/ds/product/input_with_meta.cljs b/frontend/src/app/main/ui/ds/product/input_with_meta.cljs
+index d615f67..5487af7 100644
+--- a/frontend/src/app/main/ui/ds/product/input_with_meta.cljs
++++ b/frontend/src/app/main/ui/ds/product/input_with_meta.cljs
+@@ -28,6 +28,7 @@
+   (let [title       (if meta (str value ": " meta) value)
+         editing*    (mf/use-state (d/nilv is-editing false))
+         editing?    (deref editing*)
++        composing*  (mf/use-state false)
+         input-ref   (mf/use-ref)
+         last-node*  (mf/use-ref nil)
+ 
+@@ -60,14 +61,21 @@
+            (dom/stop-propagation event)
+            (dom/select-text! (dom/get-target event))))
+ 
++        on-composition-start
++        (mf/use-fn (fn [_] (reset! composing* true)))
++
++        on-composition-end
++        (mf/use-fn (fn [_] (reset! composing* false)))
++
+         handle-key-down
+         (mf/use-fn
+          (fn [event]
+-           (let [enter? (kbd/enter? event)
+-                 esc?   (kbd/esc? event)
+-                 node   (dom/get-target event)]
+-             (when ^boolean enter? (dom/blur! node))
+-             (when ^boolean esc? (dom/blur! node)))))
++           (when-not @composing*
++             (let [enter? (kbd/enter? event)
++                   esc?   (kbd/esc? event)
++                   node   (dom/get-target event)]
++               (when ^boolean enter? (dom/blur! node))
++               (when ^boolean esc? (dom/blur! node))))))
+ 
+         props (mf/spread-props props {:ref ref-cb
+                                       :default-value value
+@@ -75,7 +83,9 @@
+                                       :auto-focus true
+                                       :on-focus on-focus
+                                       :on-blur on-stop-edit
+-                                      :on-key-down handle-key-down})]
++                                      :on-key-down handle-key-down
++                                      :on-composition-start on-composition-start
++                                      :on-composition-end on-composition-end})]
+ 
+     ;; Cleanup: Simulate a blur event
+     (mf/with-effect [on-blur last-node*]

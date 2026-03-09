@@ -1,0 +1,43 @@
+# Penpot Frontend with IME Fix (Source-Patched Build)
+#
+# Applies ime-fix-source.patch to ClojureScript sources and rebuilds
+# the frontend JS. WASM artifacts are reused from the official image
+# to avoid needing Rust/Emscripten.
+#
+# Usage:
+#   docker compose build penpot-frontend   (when PENPOT_FIX_TYPE=build)
+
+# --- Extract WASM artifacts from official image ---
+FROM penpotapp/frontend:2.13.3 AS donor
+
+# --- Minimal builder: JDK + Node + Clojure ---
+FROM eclipse-temurin:25-jdk-noble AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl git rsync ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    corepack enable && \
+    curl -L https://download.clojure.org/install/linux-install-1.12.0.1479.sh | bash && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+RUN git clone --depth 1 --branch 2.13.3 https://github.com/penpot/penpot.git .
+
+COPY ime-fix-source.patch /tmp/
+RUN git apply /tmp/ime-fix-source.patch
+
+# Reuse WASM from official image (no Rust/Emscripten needed)
+COPY --from=donor /var/www/app/js/worker/ frontend/resources/public/js/worker/
+COPY --from=donor /var/www/app/js/render-wasm.js frontend/resources/public/js/render-wasm.js
+COPY --from=donor /var/www/app/js/render-wasm.wasm frontend/resources/public/js/render-wasm.wasm
+
+WORKDIR /build/frontend
+RUN corepack install && yarn install
+RUN clojure -M:dev:shadow-cljs release main worker
+RUN yarn run build:app:libs && yarn run build:app:assets
+RUN rsync -avr resources/public/ target/dist/
+
+# --- Overlay patched JS onto official image ---
+FROM penpotapp/frontend:2.13.3
+COPY --from=builder /build/frontend/target/dist/ /var/www/app/

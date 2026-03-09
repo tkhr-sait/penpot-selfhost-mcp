@@ -37,7 +37,12 @@ x-secret-key: &penpot-secret-key
 
 services:
   penpot-frontend:
+    # To use source-patched build: set PENPOT_FIX_TYPE=build in .env,
+    # then run: docker compose build penpot-frontend && docker compose up -d
     image: penpotapp/frontend:${PENPOT_VERSION:-2.13.3}
+    build:
+      context: ./patches
+      dockerfile: Dockerfile.frontend-patched
     restart: unless-stopped
     ports:
       - "${PENPOT_PORT:-9001}:8080"
@@ -53,7 +58,8 @@ services:
       <<: [*locale, *penpot-flags, *penpot-http-body-size]
       PENPOT_BACKEND_URI: http://penpot-backend:6060
       PENPOT_EXPORTER_URI: http://penpot-exporter:6061
-      ## Patches (set to false to disable)
+      ## Patches
+      PENPOT_FIX_TYPE: ${PENPOT_FIX_TYPE:-}
       PENPOT_PATCH_IME_FIX: ${PENPOT_PATCH_IME_FIX:-true}
     networks:
       - penpot
