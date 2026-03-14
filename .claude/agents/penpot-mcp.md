@@ -64,6 +64,14 @@ storage.createCard = async (title, body) => { ... };
 ```
 **ヘルパーは必ず async にする**（後述の layoutChild 問題のため）。
 
+**テキストスタイルの明示指定（必須）**: `storage.createText()` 呼び出し時、`fontWeight` と `textAlign` は委譲仕様のテキストコンテンツ一覧・共通構造定義に記載された値を**必ず明示的に渡す**こと。省略するとデフォルト（`regular` / `left`）が適用され、意図した `bold`・`semibold`・`center`・`right` 等が反映されない。
+```javascript
+// ✕ fontWeight 省略 → regular になる
+await storage.createText('MyAccount', { fontSize: 32 });
+// ○ 仕様通り明示指定
+await storage.createText('MyAccount', { fontSize: 32, fontWeight: 'bold', textAlign: 'center' });
+```
+
 **ヘルパー消失対策**: WebSocket 切断→自動復帰時、storage のカスタムヘルパーは消失する（ビルトインラッパーは activate 再実行で復元される）。冪等ガード（`if (!storage.__myHelpers) { ... storage.__myHelpers = true; }`）付きでヘルパー登録を独立した execute_code にまとめ、切断後は再実行すること。
 
 ### 自己レビュー（レスポンス前に必ず実施）

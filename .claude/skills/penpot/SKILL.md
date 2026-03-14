@@ -101,6 +101,10 @@ Claude Code では $ARGUMENTS、OpenCode ではスキルロード時のユーザ
 **Phase 3 開始ゲート（実装着手前に必ず確認）:**
 1. 委譲テンプレート（7項目）を準備したか
 2. 自分で `execute_code` を呼ぼうとしていないか — していたら中断、委譲に切り替え
+3. デザイン仕様（[delegation-format.md](reference/core/delegation-format.md) 準拠）に以下が含まれるか:
+   - ASCIIワイヤーフレームにボードの Flex alignment（中央配置等）を明記
+   - 共通構造定義に全子要素（コンテナ・枠線・テキスト）の構造を記載
+   - テキストコンテンツ一覧に全テキスト要素の fontSize / fontWeight / align を網羅
 
 **実装判定**: `activate` 返却の `metrics` でスコープ決定
 - `metrics.tokenSets` = 0 → `storage.ensureSemanticTokens()` でデフォルトトークン適用を指示に含め、画面構築と一括委譲（howto: [multi-screen-prototype.md](reference/howto/multi-screen-prototype.md)）
