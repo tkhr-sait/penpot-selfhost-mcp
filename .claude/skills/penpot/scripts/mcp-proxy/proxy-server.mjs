@@ -50,6 +50,7 @@ const INIT_SCRIPTS = NO_INIT ? [] : (() => {
 const RETRY_ATTEMPTS = parseInt(getArg("retry-attempts", "") || env("MCP_RETRY_ATTEMPTS", "3"), 10);
 const RETRY_DELAY = parseInt(getArg("retry-delay", "") || env("MCP_RETRY_DELAY", "1000"), 10);
 const SCHEMA_FETCH_COOLDOWN = parseInt(getArg("schema-cooldown", "") || env("MCP_SCHEMA_COOLDOWN", "10000"), 10);
+const UPSTREAM_TIMEOUT = parseInt(getArg("upstream-timeout", "") || env("MCP_UPSTREAM_TIMEOUT", "55000"), 10);
 
 const TOOLS_ARG = getArg("tools", "") || env("MCP_TOOLS", "*");
 const TOOL_WILDCARD = TOOLS_ARG === "*";
@@ -61,6 +62,18 @@ const TOOL_LIST = TOOL_WILDCARD
 let upstream = null; // Client instance
 let unlocked = false;
 let initDone = false;
+
+// --- Upstream callTool with timeout (Phase 3) ---
+async function callToolWithTimeout(client, toolReq) {
+  return Promise.race([
+    client.callTool(toolReq),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `上流 MCP タイムアウト (${UPSTREAM_TIMEOUT}ms): ${toolReq.name}`
+      )), UPSTREAM_TIMEOUT)
+    ),
+  ]);
+}
 
 // --- Error text extraction (MCP SDK returns content without isError) ---
 function getResultErrorText(result) {
@@ -97,7 +110,7 @@ async function waitForPluginReconnect(maxWait = 30000, interval = 2000) {
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, interval));
     try {
-      const probe = await upstream.callTool({
+      const probe = await callToolWithTimeout(upstream, {
         name: INIT_TOOL,
         arguments: { code: "return 'ok'" },
       });
@@ -123,20 +136,27 @@ async function connectUpstream() {
   });
 
   // Try StreamableHTTP first, fall back to SSE
+  // When UPSTREAM_URL points to /sse, try StreamableHTTP at /mcp path instead
   let connected = false;
   try {
     const { StreamableHTTPClientTransport } = await import(
       "@modelcontextprotocol/sdk/client/streamableHttp.js"
     );
+    const streamableUrl = new URL(UPSTREAM_URL);
+    if (streamableUrl.pathname.endsWith("/sse")) {
+      streamableUrl.pathname = streamableUrl.pathname.replace(/\/sse$/, "/mcp");
+    }
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(UPSTREAM_URL))
+      new StreamableHTTPClientTransport(streamableUrl)
     );
     connected = true;
+    console.error(`[mcp-proxy] connected via StreamableHTTP: ${streamableUrl}`);
   } catch {
-    // StreamableHTTP not available or failed
+    // StreamableHTTP not available or failed — fall back to SSE
   }
   if (!connected) {
     await client.connect(new SSEClientTransport(new URL(UPSTREAM_URL)));
+    console.error(`[mcp-proxy] connected via SSE: ${UPSTREAM_URL}`);
   }
   client.onclose = () => {
     console.error("[mcp-proxy] upstream closed");
@@ -209,7 +229,7 @@ async function autoInit(force = false) {
       };
     }
     const code = readFileSync(script, "utf-8");
-    const result = await upstream.callTool({
+    const result = await callToolWithTimeout(upstream, {
       name: INIT_TOOL,
       arguments: { code },
     });
@@ -478,13 +498,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   // --- Forward to upstream ---
   try {
-    const result = await upstream.callTool({ name, arguments: args });
+    const result = await callToolWithTimeout(upstream, { name, arguments: args });
     // storage メソッド消失検出: WS 再接続で storage が空になった場合、init 再実行で復旧
     if (isStorageUninitError(result)) {
       console.error("[mcp-proxy] storage uninit detected, re-running autoInit + retry");
       const initResult = await autoInit(true);
       if (initResult && getResultErrorText(initResult)) return initResult;
-      return await upstream.callTool({ name, arguments: args });
+      return await callToolWithTimeout(upstream, { name, arguments: args });
     }
     // プラグイン切断検出: mcp-connect の自動再接続を待機 → autoInit → リトライ
     if (isPluginDisconnected(result)) {
@@ -494,7 +514,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         console.error("[mcp-proxy] plugin reconnected, re-running autoInit + retry");
         const initResult = await autoInit(true);
         if (initResult && getResultErrorText(initResult)) return initResult;
-        return await upstream.callTool({ name, arguments: args });
+        return await callToolWithTimeout(upstream, { name, arguments: args });
       }
       console.error("[mcp-proxy] plugin reconnect timed out");
     }
@@ -517,7 +537,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (!upstream) upstream = await connectWithRetry();
         const initResult = await autoInit(true);
         if (initResult && getResultErrorText(initResult)) return initResult;
-        return await upstream.callTool({ name, arguments: args });
+        return await callToolWithTimeout(upstream, { name, arguments: args });
       } catch (reconnectErr) {
         console.error("[mcp-proxy] storage recovery failed:", reconnectErr.message);
         upstream = null;
@@ -531,7 +551,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           console.error("[mcp-proxy] plugin reconnected, re-running autoInit + retry");
           const initResult = await autoInit(true);
           if (initResult && getResultErrorText(initResult)) return initResult;
-          return await upstream.callTool({ name, arguments: args });
+          return await callToolWithTimeout(upstream, { name, arguments: args });
         } else {
           console.error("[mcp-proxy] plugin reconnect timed out");
         }
@@ -543,7 +563,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       // 通常の upstream 切断: fast-fail or リトライ
       try {
         await reconnectOnce(!GATE_ENABLED);
-        return await upstream.callTool({ name, arguments: args });
+        return await callToolWithTimeout(upstream, { name, arguments: args });
       } catch (reconnectErr) {
         upstream = null;
       }
