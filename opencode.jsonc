@@ -56,32 +56,38 @@
         "AesSedai/minimax-m2.5": {
           "name": "AesSedai/minimax-m2.5(2026.2,229B,IQ3_S,85GB)"
         },
-        // ng.. ツールうまく呼べない
-        //"mradermacher/minimax-m2.5-reap-139b-a10b-i1": {
-        //   "name": "mradermacher/minimax-m2.5-reap(2026.2,139B,Q4_K_M,84GB)"
+        //"mradermacher/minimax-m2.5-reap-172b-a10b-i1": {
+        //   "name": "mradermacher/minimax-m2.5-reap(2026.2,172B,IQ4_XS,92GB)"
         //},
-        "AesSedai/step-3.5-flash@iq4_xs": {
-          "name": "AesSedai/step-3.5-flash(2026.2,197B,IQ4_XS,95GB)"
-        },
-        "AesSedai/step-3.5-flash@iq3_xxs": {
-          "name": "AesSedai/step-3.5-flash(2026.2,197B,IQ3_XXS,78GB)"
-        },
+        //"AesSedai/step-3.5-flash@iq4_xs": {
+        //  "name": "AesSedai/step-3.5-flash(2026.2,197B,IQ4_XS,95GB)"
+        //},
+        //"AesSedai/step-3.5-flash@iq3_xxs": {
+        //  "name": "AesSedai/step-3.5-flash(2026.2,197B,IQ3_XXS,78GB)"
+        //},
         // ng.. ツールうまく呼べない
-        //"mradermacher/step-3.5-flash-i1": {
-        //   "name": "mradermacher/step-3.5-flash-i1(2026.2,197B,IQ3_XXS,76GB)"
+        //"mradermacher/step-3.5-flash-reap-121b-a11b": {
+        //  "name": "mradermacher/step-3.5-flash-reap-121b-a11b(2026.2,121B,IQ3_XXS,68GB)"
         //},
         // skillロードできず
         //"moonshotai_kimi-linear-48b-a3b-instruct": {
         //  "name": "moonshotai_kimi-linear-48b-a3b-instruct"
         //},
-        "unsloth/qwen3.5-397b-a17b": {
-          // Visionがあるのが良い。が遅い... context-length: 90kくらいで125GB...
-          "name": "unsloth/qwen3.5-397b-a17b(2026.2,397B,IQ1_M,108GB)",
-          "modalities": {
-            "input": ["text", "image"],
-            "output": ["text"]
-          }
-        },
+        //"unsloth/qwen3.5-397b-a17b": {
+        //  // Visionがあるのが良い。が108GBなのでメモリ圧迫swap発生で遅い。... context-length も100以下
+        //  "name": "unsloth/qwen3.5-397b-a17b(2026.2,397B,IQ1_M,108GB)",
+        //  "modalities": {
+        //    "input": ["text", "image"],
+        //    "output": ["text"]
+        //  }
+        //},
+        // "bartowski/qwen3.5-397b-a17b": {
+        //   "name": "bartowski/qwen3.5-397b-a17b(2026.2,397B,IQ1_S,82GB)",
+        //   "modalities": {
+        //     "input": ["text", "image"],
+        //     "output": ["text"]
+        //   }
+        // },
         // "OpenMOSE/qwen3.5-reap-212b-a17b": {
         //   // ng..指示無視。397bのREAP版。Visionはomitされている。
         //   "name": "OpenMOSE/qwen3.5-reap-212b-a17b(2026.2,212B,IQ2_M,69GB)",
@@ -175,6 +181,9 @@
         //     "input": ["text"],
         //     "output": ["text"]
         //   }
+        // },
+        // "AesSedai/nvidia-nemotron-3-super-120b-a12b": {
+        //   "name": "AesSedai/nvidia-nemotron-3-super-120b-a12b(2026.3,120B,Q4_K_XL,82GB)"
         // },
         // "unsloth/qwen3-coder-next": {
         //   // メモリに収まるし、実用的な速さ。だけど指示は無視.. context-length: 256kくらい指定できるが、動きは良くない...
