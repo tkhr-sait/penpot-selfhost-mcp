@@ -64,6 +64,15 @@ Claude Code では $ARGUMENTS、OpenCode ではスキルロード時のユーザ
 **重要**: 環境操作は必ず `penpot-manage.sh` 経由（`docker compose` 直接実行はポート競合の原因）。
 **MCP再接続**: エラー時は `activate` を再度呼び出す。
 
+**MCP ツール不可視時の診断**: `activate` / `execute_code` 等が利用可能ツール一覧・ToolSearch のいずれでも見つからない場合、MCP クライアント側の接続が未確立。コンテナが `up` でも発生しうる:
+- Claude Code (CLI / VS Code extension): `/mcp` → `penpot-official` を選択 → Reconnect
+- VS Code Copilot: `Ctrl+Shift+P` → `MCP: List Servers` → `penpot-official` を Restart
+- opencode: セッション再起動、または `/penpot` スキル再ロード
+
+再接続後に `activate` を呼び出して storage ラッパーを初期化すること。
+
+**activate の `context` / `metrics` はブラウザで開いているファイルスコープ**: `context.pages` / `context.tokenSets` / `metrics.*` は現在 Playwright ブラウザで開いているファイルの情報のみを返す。別ファイルで作成した成果物は見えない。目的のファイルで作業を続けたい場合は Penpot UI で該当ファイルを開いた上で `activate` を呼び直す、または `storage.openFile(projectId, fileId)` でファイルを切替える。
+
 ---
 
 ## デザインシステム構築
@@ -105,6 +114,8 @@ Claude Code では $ARGUMENTS、OpenCode ではスキルロード時のユーザ
    - ASCIIワイヤーフレームにボードの Flex alignment（中央配置等）を明記
    - 共通構造定義に全子要素（コンテナ・枠線・テキスト）の構造を記載
    - テキストコンテンツ一覧に全テキスト要素の fontSize / fontWeight / align を網羅
+   - 全 Flex 子要素の `horizontalSizing` / `verticalSizing` が明示されている（[delegation-format.md の Flex sizing](reference/core/delegation-format.md#flex-sizing-の指定) 参照）
+4. [delegation-format.md の仕様完成前チェックリスト](reference/core/delegation-format.md#仕様完成前チェックリスト) を全項目満たすか（全テキスト ≥12px / タップ要素 ≥44×44 / トークンのみ / 同一ページ間遷移 / 保存される action のみ / TextRange.align 不使用）
 
 **実装判定**: `activate` 返却の `metrics` でスコープ決定
 - `metrics.tokenSets` = 0 → `storage.ensureSemanticTokens()` でデフォルトトークン適用を指示に含め、画面構築と一括委譲（howto: [multi-screen-prototype.md](reference/howto/multi-screen-prototype.md)）

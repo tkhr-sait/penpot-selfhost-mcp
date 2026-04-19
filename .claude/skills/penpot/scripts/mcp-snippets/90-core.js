@@ -235,7 +235,7 @@ storage.validateDesign = (opts = {}) => {
   for (const fb of flexBoards) {
     const children = penpotUtils.findShapes(s => true, fb).filter(c => {
       // 直接の子要素のみ（findShapes は再帰的なので親IDで絞る）
-      try { return c.layoutChild && c.layoutChild.horizontalSizing === 'fixed'; } catch(e) { return false; }
+      try { return c.layoutChild && c.layoutChild.horizontalSizing === 'fix'; } catch(e) { return false; }
     });
     // 固定幅の子要素が親より幅広い場合
     for (const child of children) {
@@ -310,18 +310,38 @@ storage.validateDesign = (opts = {}) => {
     }
   }
 
-  // トークン未適用検出（opt-in）
-  if (opts.checkTokenCoverage) {
+  // トークン未適用検出（opt-out: tokenSets > 0 のとき自動実行、opts.checkTokenCoverage === false で無効化）
+  if (opts.checkTokenCoverage !== false) {
     const tokenSetsForCheck = storage.safeTokenSets([]);
     if (tokenSetsForCheck.length > 0) {
-      const shapes = penpotUtils.findShapes(s => s.type !== 'board' && s.fills && s.fills.length > 0, root);
-      let untokenized = 0;
-      for (const s of shapes) {
-        const hasToken = s.appliedTokens && Object.keys(s.appliedTokens).length > 0;
-        if (!hasToken) untokenized++;
+      // fill 検査: board 型も対象（背景色のハードコード検出）。rectangle/text/path 等も含む
+      // 実機確認済: 適用済みトークンは shape.tokens（{ fill, stroke, ... } 形式、または空配列 []）に入る
+      const fillShapes = penpotUtils.findShapes(s => s.fills && s.fills.length > 0, root);
+      const strokeShapes = penpotUtils.findShapes(s => s.strokes && s.strokes.length > 0, root);
+      const missing = [];
+      for (const s of fillShapes) {
+        if (s === root) continue; // Root Frame 除外
+        if (s.tokens === undefined) {
+          throw new Error(`[validateDesign] shape "${s.name || s.id}" に tokens プロパティが存在しない。Penpot Plugin API の仕様変更を確認せよ`);
+        }
+        const hasFillToken = s.tokens.fill || s.tokens['fills.color'];
+        if (!hasFillToken) missing.push({ id: s.id, name: s.name, type: s.type, prop: 'fill' });
       }
-      if (untokenized > 0) {
-        issues.push(`[INFO] トークン未適用のシェイプが${untokenized}件（checkTokenCoverage）`);
+      for (const s of strokeShapes) {
+        if (s === root) continue;
+        if (s.tokens === undefined) {
+          throw new Error(`[validateDesign] shape "${s.name || s.id}" に tokens プロパティが存在しない。Penpot Plugin API の仕様変更を確認せよ`);
+        }
+        const hasStrokeToken = s.tokens.stroke || s.tokens.strokeColor || s.tokens['strokes.color'];
+        if (!hasStrokeToken) missing.push({ id: s.id, name: s.name, type: s.type, prop: 'stroke' });
+      }
+      if (missing.length > 0) {
+        // 先頭5件を列挙、残りは件数のみ
+        const preview = missing.slice(0, 5)
+          .map(m => `"${m.name}"(${m.type}.${m.prop})`)
+          .join(', ');
+        const rest = missing.length > 5 ? ` ほか${missing.length - 5}件` : '';
+        issues.push(`[WARN] トークン未適用シェイプ ${missing.length}件: ${preview}${rest} — tokenSets > 0 のためトークン適用が期待される`);
       }
     }
   }
@@ -340,7 +360,7 @@ storage.__wrappers.push(
   { fn: 'storage.switchThemePersistent(active[], inactive[])', replaces: null, reason: '複数セットの永続的テーマ切替' },
   { fn: 'storage.getPageContext()', replaces: null, reason: 'ページ選択後のボード一覧取得' },
   { fn: 'storage.spacing', replaces: null, reason: '{xs:4,sm:8,md:12,base:16,lg:24,xl:32,2xl:48,3xl:64}' },
-  { fn: 'storage.validateDesign(opts)', replaces: null, reason: 'デザイン検証（font/size/page/gap/空ボード/ページ名重複/インタラクション）' },
+  { fn: 'storage.validateDesign(opts)', replaces: null, reason: 'デザイン検証（font/size/page/gap/空ボード/ページ名重複/インタラクション/トークン未適用）。tokenSets>0 のときトークン未適用チェック自動実行、opts.checkTokenCoverage=false で無効化' },
 );
 
 

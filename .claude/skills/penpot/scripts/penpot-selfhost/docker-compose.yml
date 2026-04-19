@@ -39,7 +39,7 @@ services:
   penpot-frontend:
     # To use source-patched build: set PENPOT_FIX_TYPE=build in .env,
     # then run: docker compose build penpot-frontend && docker compose up -d
-    image: penpotapp/frontend:${PENPOT_VERSION:-2.13.3}
+    image: penpotapp/frontend:${PENPOT_VERSION:-2.14.3}
     build:
       context: ./patches
       dockerfile: Dockerfile.frontend-patched
@@ -65,7 +65,7 @@ services:
       - penpot
 
   penpot-backend:
-    image: penpotapp/backend:${PENPOT_VERSION:-2.13.3}
+    image: penpotapp/backend:${PENPOT_VERSION:-2.14.3}
     restart: unless-stopped
     volumes:
       - penpot_assets:/opt/data/assets
@@ -93,7 +93,7 @@ services:
       - penpot
 
   penpot-exporter:
-    image: penpotapp/exporter:${PENPOT_VERSION:-2.13.3}
+    image: penpotapp/exporter:${PENPOT_VERSION:-2.14.3}
     restart: unless-stopped
     depends_on:
       penpot-valkey:
@@ -276,7 +276,7 @@ services:
   # Project Storybook (serves built storybook-static from workspace root)
   # profile: storybook — デフォルト起動から除外。storybook-static/ 存在時のみ起動
   penpot-storybook:
-    image: penpotapp/storybook:${PENPOT_VERSION:-2.13.3}
+    image: penpotapp/storybook:${PENPOT_VERSION:-2.14.3}
     profiles: [storybook]
     restart: unless-stopped
     ports:

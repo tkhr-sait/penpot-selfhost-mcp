@@ -6,7 +6,7 @@
 #                              Plugin static files served on port 4400
 #
 # Build args:
-#   PENPOT_REF              - Git ref to checkout (default: mcp-prod)
+#   PENPOT_REF              - Git ref to checkout (default: mcp-prod-2.14.1)
 #   PENPOT_MCP_WEBSOCKET_URL - WebSocket URL embedded in plugin at build time
 #                              (default: http://localhost:4402)
 
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
-ARG PENPOT_REF=mcp-prod
+ARG PENPOT_REF=mcp-prod-2.14.1
 ARG PENPOT_MCP_WEBSOCKET_URL=http://localhost:4402
 
 WORKDIR /build
@@ -81,7 +81,7 @@ RUN node -e "\
 RUN pnpm install --prod --frozen-lockfile
 
 # Environment defaults
-ENV PENPOT_MCP_SERVER_LISTEN_ADDRESS=0.0.0.0
+ENV PENPOT_MCP_SERVER_HOST=0.0.0.0
 ENV PENPOT_MCP_SERVER_PORT=4401
 ENV PENPOT_MCP_WEBSOCKET_PORT=4402
 ENV PENPOT_MCP_REMOTE_MODE=true

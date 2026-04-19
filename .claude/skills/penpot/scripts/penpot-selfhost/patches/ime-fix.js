@@ -1,6 +1,6 @@
 /**
  * IME Composition Fix for Penpot
- * https://github.com/penpot/penpot — affects v2.13.x
+ * https://github.com/penpot/penpot
  *
  * Problem:
  *   When IME is active (Japanese / Chinese / Korean input), pressing

@@ -2,6 +2,21 @@
 
 親AIがサブエージェント（penpot-mcp）に指示を作成する際の必須フォーマット。該当するセクションのみ記載すること。
 
+## 仕様完成前チェックリスト
+
+**仕様（テキスト一覧・共通構造・ワイヤーフレーム）を委譲プロンプトに書く前に、必ず全項目を満たすこと。**
+
+| # | 項目 | 判定基準 |
+|---|------|---------|
+| 1 | 全テキスト `fontSize ≥ 12` | 補助テキスト・アバター内文字・バッジ内文字も例外なし。11px 以下を仕様に書かない |
+| 2 | クリック・タップ可能要素 `width ≥ 44 かつ height ≥ 44` | 主要アクション / Close / Back / アイコンボタンを含む。小さく見せたい場合でも透明 board ラッパーで 44×44 を確保し、内部に視覚要素を配置する |
+| 3 | 色は**セマンティックトークンのみ** | `fill:token名` / `strokeColor:token名` の形で指定。`#RGB` 値を仕様に書かない（カスタムトークンが必要な場合は「トークン定義」セクションで overrides を明示） |
+| 4 | インタラクションは**同一ページ内のボード間のみ** | 異なるページ間の navigate-to は動作しない |
+| 5 | `addInteraction` の action は `navigate-to` / `close-overlay` / `previous-screen` / `open-url` のみ | `open-overlay` / `toggle-overlay` は保存されないため仕様から除外 |
+| 6 | `TextRange.align = 'center'/'right'/'justify'` を使わない | align は反映されない。親 Flex の `mainAlignment`/`crossAlignment` で寄せる |
+
+満たせない項目があれば、仕様をそのまま委譲せず**調整してから**委譲する。調整例: 「11px のキャプション」は 12px に引き上げる、「16×24 の ✕ アイコン」は 44×44 の透明 board + 内部 text に変更。
+
 ## トークン定義（テーマ対応時）
 
 デフォルトを使う場合は `storage.ensureSemanticTokens()` を指示するだけでよい（14色+spacing+borderRadius が自動登録される）。
@@ -95,6 +110,48 @@ board (h:56, flex-row, fillColor: surface-primary, padding:0 16, align:center)
 - fontWeight のデフォルトは `regular`。**非デフォルト値（bold, semibold 等）は必ず明記**
 - align のデフォルトは `left`。**非デフォルト値（center, right）は必ず明記**
 - ヘルパー関数はこの構造定義に従い、全パラメータを `storage.createText()` に明示的に渡すこと
+
+## Flex sizing の指定
+
+Flex レイアウト子要素のサイジングは **仕様段階で明示** する（サブエージェントの自主判断を減らすため）。
+
+### LayoutChildProperties（`child.layoutChild.*`）の値
+
+| 値 | 用途 | 使い方 |
+|----|------|-------|
+| `'fill'` | 親の残り空間を占有 | リスト項目の幅一杯、flex 親に複数子があり伸縮させたい場合 |
+| `'auto'` | コンテンツに応じて自動 | テキストの折返し高さ、子要素の積み上げ高さ |
+| `'fix'` | `resize(w,h)` で指定した固定値 | 中央配置モーダルの幅、アイコンボタンなど固定サイズ要素 |
+
+**仕様での表記例**:
+- `TaskList (w:fill, h:auto, flex-col, ...)` → `layoutChild.horizontalSizing='fill'`, `verticalSizing='auto'`
+- `Modal Card (w:520 fix, h:auto)` → `horizontalSizing='fix'` + `resize(520, ...)`, `verticalSizing='auto'`
+- `Icon Button (w:44 fix, h:44 fix)` → 両方 `'fix'` + `resize(44, 44)`
+
+### 中央配置モーダルの必須指定
+
+中央配置のモーダルカード（親が `mainAlignment:'center', crossAlignment:'center'` の Flex）では、子カードは **`horizontalSizing:'fix'` + `resize(w, h)` を明示**。`'auto'` は親中央揃えで幅 0 に潰れる。
+
+```
+Card (w:520 fix, h:auto, flex-col, padding:32, rowGap:20, fill:surface-card, br:16)
+```
+
+### `flex-grow:1` と `'fill'` の違い
+
+- `'fill'` — LayoutChildProperties のサイジング値。親 Flex の残り空間を占有
+- `flex-grow:1` — 慣用表記（実装では `layoutChild.horizontalSizing='fill'` と同じ効果になるケースが多い）。仕様書では **`'fill'` に統一**
+
+### タッチターゲット 44×44 の実装
+
+小さなアイコン（例: ✕ 20px の CloseBtn）を置く場合は **透明 board ラッパー** で 44×44 を確保し内部に text を置く:
+
+```
+【IconButton】createIconButton(parent, {icon, destination?})
+board (w:44 fix, h:44 fix, flex-row, mainAlign:center, crossAlign:center,
+       fill:none（空配列）, stroke:none, br:8)
+└── text icon (20, regular, <tokenName>, center)
+※ インタラクションは board 側に addInteraction する（text には付けない）
+```
 
 ## テキストコンテンツ一覧
 

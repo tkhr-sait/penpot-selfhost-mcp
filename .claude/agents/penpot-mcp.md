@@ -76,9 +76,15 @@ await storage.createText('MyAccount', { fontSize: 32, fontWeight: 'bold', textAl
 
 ### 自己レビュー（レスポンス前に必ず実施）
 実装完了後、親AIに返す前に以下を実行:
-1. `return storage.validateDesign()` — 制約違反の検出
+1. `return storage.validateDesign()` — 制約違反の検出。`tokenSets > 0` のプロジェクトでは **トークン未適用チェックが自動実行** される（`checkTokenCoverage: false` で無効化可）
 2. `export_shape`（主要ボード, format: png）— 視覚的な自己確認
 3. 違反・異常があれば修正してから返却
+
+**トークン未適用 WARN は完了条件違反として扱う**:
+- `[WARN] トークン未適用シェイプ N件` が出力された場合、N=0 になるまで `storage.applyTokenSafe` / `storage.applyTokenToShapesSafe` で適用を修正してから返却
+- トークン適用・ハードコード色なしが要件のプロジェクトで、未適用のまま完了報告しないこと
+- ボード背景、stroke（枠線）も検査対象。fill だけでなく stroke もトークン適用が必要
+- `applyTokenToShapesSafe` で反映されなかったシェイプは、個別に `penpot.selection = [shape]` → `token.applyToSelected([prop])` で適用する
 
 ### エラー回復（execute_code 失敗時）
 

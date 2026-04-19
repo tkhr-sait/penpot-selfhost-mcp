@@ -8,7 +8,7 @@
 #   docker compose build penpot-frontend   (when PENPOT_FIX_TYPE=build)
 
 # --- Extract WASM artifacts from official image ---
-FROM penpotapp/frontend:2.13.3 AS donor
+FROM penpotapp/frontend:2.14.3 AS donor
 
 # --- Minimal builder: JDK + Node + Clojure ---
 FROM eclipse-temurin:25-jdk-noble AS builder
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-RUN git clone --depth 1 --branch 2.13.3 https://github.com/penpot/penpot.git .
+RUN git clone --depth 1 --branch 2.14.3 https://github.com/penpot/penpot.git .
 
 COPY ime-fix-source.patch /tmp/
 RUN git apply /tmp/ime-fix-source.patch
@@ -33,11 +33,11 @@ COPY --from=donor /var/www/app/js/render-wasm.js frontend/resources/public/js/re
 COPY --from=donor /var/www/app/js/render-wasm.wasm frontend/resources/public/js/render-wasm.wasm
 
 WORKDIR /build/frontend
-RUN corepack install && yarn install
+RUN corepack install && pnpm install --frozen-lockfile
 RUN clojure -M:dev:shadow-cljs release main worker
-RUN yarn run build:app:libs && yarn run build:app:assets
+RUN pnpm run build:app:libs && pnpm run build:app:assets
 RUN rsync -avr resources/public/ target/dist/
 
 # --- Overlay patched JS onto official image ---
-FROM penpotapp/frontend:2.13.3
+FROM penpotapp/frontend:2.14.3
 COPY --from=builder /build/frontend/target/dist/ /var/www/app/

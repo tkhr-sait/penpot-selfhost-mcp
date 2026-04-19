@@ -54,6 +54,22 @@ LLMは **プラグイン環境内で任意のJavaScriptコードを実行** し�
 - `metrics` はスキルのフェーズ判定に使用（SKILL.md 参照）
 - WebSocket 切断時も `activate` 再呼び出しで復帰可能
 
+## Plugin API 直接呼び出し(storage ラッパーが優先)
+
+direct Plugin API を呼ぶ場合の正規シグネチャと storage ラッパー対応:
+
+| Plugin API | storage ラッパー(推奨) |
+|---|---|
+| `catalog.addSet({ name })` | `storage.ensureTokenSet(name)` |
+| `set.addToken({ type, name, value })` | `storage.ensureToken(set, type, name, value)` |
+| `catalog.addTheme({ group, name })` | `storage.ensureTheme(group, name, sets)` |
+| `token.applyToSelected(Array<string>)` | `storage.applyTokenSafe(shape, tokenOrName, props)` / `applyTokenToShapesSafe` |
+
+- プロパティ名は **camelCase**(`strokeColor`, `rowGap` 等)。storage ラッパーは kebab-case 入力も内部で正規化
+- `token.applyToSelected` の props は **Array**(Set は受理されない)
+- `shape.applyToken` / `token.applyToShapes` は使わない — 代わりに `penpot.selection = [shape]` + `token.applyToSelected(props)`、または storage ラッパーを使用
+- **適用済みトークンの読み取りは `shape.tokens`**（`{ fill: 'token-name', stroke: 'token-name', ... }` 形式、未適用時は空配列 `[]`）
+
 ## Plugin API リファレンス
 
 ```
@@ -146,17 +162,24 @@ activate で初期化される storage ラッパーは、対応する penpot ネ
 - `token.value` は読み取り専用 → `remove()` + `addToken()` で更新
 - `addSet()` 戻り値は即時読取不可 → `catalog.sets.find()` で再取得
 - 大量操作は 10件バッチ + 200ms sleep（WebSocket 切断対策。切断しても MCP 再接続は不要、自動復帰）
-> **注意**: `penpot_api_info` の型情報では camelCase（`strokeColor` 等）で表示されるが、
-> `applyToken` / `applyTokenSafe` のプロパティ引数は **kebab-case**（`stroke-color` 等）を使用する。
+> **注意**: プロパティ引数は **camelCase が正規形**（`strokeColor`, `rowGap` 等 — `penpot_api_info` の型情報と一致）。
+> `storage.applyTokenSafe` / `applyTokenToShapesSafe` は kebab-case 入力も受理し内部で camelCase に自動正規化するため既存コード互換。
 
-- `storage.applyTokenSafe()` のトークンタイプ→プロパティ対応:
+- `storage.applyTokenSafe()` のトークンタイプ→プロパティ対応(camelCase 正規形):
 
 | トークンタイプ | 適用プロパティ |
 |--------------|-------------|
-| `color` | `fill`, `stroke-color` |
-| `spacing` | `row-gap`, `column-gap`, `p1`(top) `p2`(right) `p3`(bottom) `p4`(left), `m1`... |
+| `color` | `fill`, `strokeColor` |
+| `spacing` | `rowGap`, `columnGap`, `p1`(top) `p2`(right) `p3`(bottom) `p4`(left), `m1`... |
 | `borderRadius` | `r1`(top-left) `r2`(top-right) `r3`(bottom-right) `r4`(bottom-left) |
-| `sizing` | `width`, `height` |
+| `sizing` | `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH` |
+| `borderWidth` | `strokeWidth` |
+| `dimension` | `x`, `y`, `strokeWidth` |
+| `fontSizes` | `fontSize` |
+| `fontWeights` | `fontWeight` |
+| `letterSpacing` | `letterSpacing` |
+| `textDecoration` | `textDecoration` |
+| `textCase` | `textCase` |
 
 #### デフォルトセマンティックトークン
 
@@ -180,8 +203,8 @@ Shared + Light セットがセッション内でアクティブ化される。�
 コード例 → [howto: トークン一括登録](../howto/token-registration.md)
 
 ### テーマ管理
-- `catalog.addTheme('group', 'name')` でテーマ作成（引数は2つの文字列、オブジェクトではない）
-- `theme.addSet(setObj)` でテーマにセットを関連付け
+- `catalog.addTheme({ group, name })` でテーマ作成
+- `theme.addSet(setObj)` でテーマにセットを関連付け（Plugin API 内のみ、サーバー永続化なし）
 - **⚠ `theme.toggleActive()` は WebSocket 切断を引き起こす** — 使用禁止。テーマ切替はセット単位で `set.active = true/false` を使う
 - **⚠ `theme.activeSets` は常に null** — Plugin API でのテーマ→セット関連の直接読み取りは不可。`ensureTheme` のセッション内キャッシュ (`__themeSetMap`) が唯一の有効データソース
 
@@ -239,15 +262,15 @@ Shared + Light セットがセッション内でアクティブ化される。�
 - `shape.addInteraction(trigger, action, delay?)` で追加
   - trigger: 文字列（`'click'`, `'mouse-enter'`, `'mouse-leave'`, `'after-delay'` 等）
   - action: オブジェクト（`{ type: 'navigate-to', destination: targetBoard }` 等）
-- **動作する Action**:
+- **保存される Action**:
   - NavigateTo: `{ type: 'navigate-to', destination: targetBoard }`
   - CloseOverlay: `{ type: 'close-overlay' }`
   - PreviousScreen: `{ type: 'previous-screen' }`
   - OpenUrl: `{ type: 'open-url', url: '...' }`
-- **⚠ Plugin API で未実装（型定義のみ存在）**:
-  - OpenOverlay: `addInteraction` が `undefined` を返し保存されない
-  - ToggleOverlay: 同上
-  - **回避策**: `navigate-to` で設定後、Penpot UI で手動で OpenOverlay に変更
+- **保存されない Action**（`addInteraction` が `null` を返す）:
+  - OpenOverlay: `{ type: 'open-overlay', destination: board }`
+  - ToggleOverlay: `{ type: 'toggle-overlay', destination: board }`
+  - 対処: `navigate-to` で設定し、必要なら Penpot UI で OpenOverlay に切り替える
 - API 型は `penpot_api_info` で確認
 
 ### コード生成（ハンドオフ）
@@ -276,16 +299,76 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 | `layoutChild` が null | appendChild 直後にアクセス | `storage.appendChild()` を使う（sleep 内蔵） |
 | `hSizing` / `vSizing` が効かない | プロパティ名が違う | `horizontalSizing` / `verticalSizing` |
 | `execute_code` の結果が空 | 末尾の式評価では出力されない | `return` 文を使う |
-| トークン `set.active` がリロードで消える | Plugin API は永続化しない | `storage.switchThemePersistent()` |
+| トークン `set.active` の変更がファイル再オープン後に失われる | Plugin API の `active` 変更はセッションスコープ | セッション内は `set.toggleActive()` または `set.active = bool`、永続化は `storage.switchThemePersistent()` |
 | `frame.findShapes()` がエラー | 存在しないメソッド（`page.findShapes()` とは別） | `penpotUtils.findShapes(pred, frame)` |
 | `penpot.pages` がエラー | 存在しないプロパティ | `penpotUtils.getPages()` |
 | インタラクションが動かない | 異なるページ間で設定 | 同一ページ内のボード間のみ有効 |
-| `OpenOverlay` が効かない | Plugin API 未実装 | `navigate-to` で代替 |
+| `open-overlay` / `toggle-overlay` / `close-overlay` アクションが保存されない | `addInteraction` が null を返し interactions に追加されない | `navigate-to` で代替 |
 | `shape.fills[0].fillColor = ...` が効かない | fills/strokes の要素は読み取り専用 | 配列全体を置換: `shape.fills = [{...}]` |
-| `token.resolvedValue` が null/不正 | Plugin API の既知バグ (#8341) | `token.value` を使用。fontFamilies は fontNameMap で手動変換 |
-| Flex 内で `verticalSizing`/`horizontalSizing` が効かない | Plugin API の既知バグ | `resize()` で手動サイズ指定 |
+| `token.resolvedValue` が自トークンの値と一致しない | `resolvedValue` は**アクティブセット優先解決後の値**を返す（同名トークンが複数セットにある場合、優先セットの値で上書き解決される） | 自セットの value が欲しいときは `token.value` を使用。fontFamilies は fontNameMap で手動変換 |
 | 大量操作で WebSocket 切断 | バースト過多 | 10件バッチ + 200ms sleep |
 | 切断後にカスタムヘルパーが消失 | WebSocket 自動復帰で storage リセット | 冪等ガード付きヘルパー登録を再実行（ビルトインは activate で復元） |
+| `flex.padding = { top, right, bottom, left }` が効かない | FlexLayout に `padding` プロパティなし | `flex.topPadding`/`rightPadding`/`bottomPadding`/`leftPadding` 個別代入、または `flex.verticalPadding`/`horizontalPadding` |
+| `board.position = { x, y }` が効かない | Board/Shape は non-extensible | `board.x = ...; board.y = ...;` |
+| `catalog.addSet('name')` / `set.addToken('type','name','value')` で何も起きない | object 引数必須 | `catalog.addSet({name})` / `set.addToken({type, name, value})` または `storage.ensureTokenSet` / `storage.ensureToken` |
+| `shape.applyToken(token, props)` が "check error" を出し tokens/fills 変化なし | `shape.applyToken` は動作しない | `storage.applyTokenSafe(shape, tokenOrName, props)`（`penpot.selection = [shape]` + `token.applyToSelected(props)`） |
+| `token.applyToShapes(shapes, props)` を呼んでも tokens/fills 変化なし | `token.applyToShapes` は動作しない | `storage.applyTokenToShapesSafe(tokenOrName, shapes, props)` |
+| `penpot.selection = shapes`（複数）+ `token.applyToSelected` で一部シェイプに反映されない | selection 一括指定は stroke 系やボード型を取りこぼす | `penpot.selection = [shape]` → `token.applyToSelected([prop])` の個別ループを使う（`storage.applyTokenToShapesSafe` はこの実装。大量時は件数×約250ms） |
+| `[WARN] トークン未適用シェイプ N件` が `validateDesign` に出る | fill/stroke のハードコード色が残存 | 未適用シェイプに `applyTokenSafe` / `applyTokenToShapesSafe` で適用してから完了報告する（`tokenSets > 0` のとき `validateDesign` は自動でカバレッジを検査） |
+
+## 補助 API リファレンス
+
+penpotUtils / storage ラッパーと併用する Plugin API。
+
+### Page
+- `page.findShapes(criteria?)` — `{ name?, nameLike?, type? }` で絞り込み。例: `page.findShapes({ type: 'board' })` / `page.findShapes({ nameLike: 'Home' })`
+  - 複雑な条件は `penpotUtils.findShapes(pred, root)`（述語関数）を使う
+- `page.addCommentThread(content, position): Promise<CommentThread>` / `removeCommentThread(thread)` / `findCommentThreads(criteria?)` — コメントスレッド CRUD
+
+### TokenSet / TokenCatalog
+- `set.tokensByType: Array<[type, Token[]]>` — `Map.entries()` 形式。`new Map(set.tokensByType)` で Map 化可能
+- `set.getTokenById(id): Token | undefined`
+- `set.toggleActive()` — `active` 反転（永続化は `storage.switchThemePersistent`）
+- `set.duplicate(): TokenSet` / `set.remove(): void`
+- `catalog.getSetById(id)` / `catalog.getThemeById(id)`
+
+### TokenTheme
+- `theme.activeSets: TokenSet[]` — 非アクティブテーマでは空配列
+- `theme.duplicate()` / `theme.remove()`
+
+### Token (TokenBase)
+- `token.description: string` — 作成時に `addToken({ type, name, value, description })` で指定可
+- `token.resolvedValueString: string | undefined` — 全トークン共通の解決済文字列
+- `token.duplicate(): Token` / `token.remove(): void`
+- `token.applyToSelected(properties)` — `penpot.selection` に適用（ラッパーの内部実装）
+
+### FlexLayout
+- `flex.alignContent: 'center'|'start'|'end'|'stretch'|'space-between'|'space-around'|'space-evenly'`
+- `flex.justifyItems: 'center'|'start'|'end'|'stretch'`
+- `flex.horizontalSizing` / `verticalSizing` の値域: `'fill'|'auto'|'fit-content'`（`LayoutChildProperties` 側は `'fill'|'auto'|'fix'`）
+- `layoutChild.verticalSizing` / `horizontalSizing` は直接代入で反映される
+
+### Sizing 使い分け早見表
+
+| 要件 | `layoutChild.horizontalSizing` | `layoutChild.verticalSizing` | 追加操作 |
+|------|-------------------------------|------------------------------|---------|
+| 親の残り幅/高さを占有 | `'fill'` | `'fill'` | — |
+| コンテンツに応じた自動サイズ | `'auto'` | `'auto'` | テキストは `growType: 'auto-height'` / `'auto-width'` も併用 |
+| 固定サイズ | `'fix'` | `'fix'` | `shape.resize(w, h)` で値指定 |
+| 中央配置モーダル（親が mainAlign/crossAlign: center） | `'fix'` + `resize(w, h)` | `'auto'` | 幅を `'auto'` にすると 0 に潰れる |
+| タッチターゲット 44×44 のアイコンボタン | `'fix'` | `'fix'` | `resize(44, 44)` + `fills = []` で透明化 |
+
+### Shape
+- `shape.switchVariant(pos, value)` / `combineAsVariants(ids)` / `isVariantHead()`
+- `board.isVariantContainer(): boolean | null` — 通常 Board では `null` を返す（true/false でない点に注意）
+- `penpot.flatten(shapes): Path[]`
+- `penpot.replaceColor(shapes, oldColor, newColor)`
+- `penpot.uploadMediaData(name, data, mimeType)` / `createShapeFromSvgWithImages(svgString)`
+
+### Interaction
+- `Action` union: `NavigateTo` / `OpenOverlay` / `ToggleOverlay` / `CloseOverlay` / `PreviousScreen` / `OpenUrl`
+- `Trigger`: `'click' | 'mouse-enter' | 'mouse-leave' | 'after-delay'`
+- `navigate-to` のみ `addInteraction` で保存される。overlay 系は保存されないため navigate-to で代替する
 
 ## セルフホスト環境固有の注意
 
@@ -336,8 +419,11 @@ penpot.generateMarkup(shapes, { type: 'svg' });
 REST API で作成されたテキストは content-level に色情報が埋め込まれており、`shape.fills` / `range.fills` 変更が反映されない場合がある。確実な方法は **テキスト削除→再作成**。
 
 ### TextRange.align
-- `range.align = 'center'` は代入エラーにならないが反映されない
-- **回避策**: 親Flex boardの `alignItems: 'center'` + テキストの `growType: 'auto-width'`
+- `range.align = 'center' | 'right' | 'justify'` は代入エラーにならないが反映されない（Plugin API の既知制約。方向を問わず無効）
+- **回避策**:
+  - 中央寄せ: 親Flex board の `alignItems: 'center'` + テキストの `growType: 'auto-width'`
+  - 右寄せ: 親を flex-row にして `mainAlignment: 'end'`、または親に `justifyContent: 'end'` を設定
+  - 長文で右寄せしたい場合は、テキスト幅を親一杯に広げる（`horizontalSizing: 'fill'`）+ 親の配置で寄せる方が安定
 
 ### イベントリスナー
 ```javascript

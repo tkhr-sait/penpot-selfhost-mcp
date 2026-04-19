@@ -47,26 +47,30 @@ storage.VALID_TOKEN_TYPES = [
   'textCase', 'number', 'rotation', 'sizing'
 ];
 
-// TokenType → 適用可能 TokenProperty[] のマップ
+// TokenType → 適用可能 TokenProperty[] のマップ（camelCase 正規形）
+// kebab-case 入力も検証時に auto-normalize される
 storage.TOKEN_PROPERTY_MAP = {
-  color:          ['fill', 'stroke-color'],
-  dimension:      ['x', 'y', 'stroke-width'],
-  spacing:        ['row-gap', 'column-gap', 'p1', 'p2', 'p3', 'p4', 'm1', 'm2', 'm3', 'm4'],
+  color:          ['fill', 'strokeColor'],
+  dimension:      ['x', 'y', 'strokeWidth'],
+  spacing:        ['rowGap', 'columnGap', 'p1', 'p2', 'p3', 'p4', 'm1', 'm2', 'm3', 'm4'],
   typography:     ['typography'],
   shadow:         ['shadow'],
   opacity:        ['opacity'],
   borderRadius:   ['r1', 'r2', 'r3', 'r4'],
-  borderWidth:    ['stroke-width'],
-  fontWeights:    ['font-weight'],
-  fontSizes:      ['font-size'],
-  fontFamilies:   ['font-families'],
-  letterSpacing:  ['letter-spacing'],
-  textDecoration: ['text-decoration'],
-  textCase:       ['text-case'],
-  number:         ['rotation', 'line-height'],
+  borderWidth:    ['strokeWidth'],
+  fontWeights:    ['fontWeight'],
+  fontSizes:      ['fontSize'],
+  fontFamilies:   ['fontFamilies'],
+  letterSpacing:  ['letterSpacing'],
+  textDecoration: ['textDecoration'],
+  textCase:       ['textCase'],
+  number:         ['rotation', 'lineHeight'],
   rotation:       ['rotation'],
-  sizing:         ['width', 'height', 'layout-item-min-w', 'layout-item-max-w', 'layout-item-min-h', 'layout-item-max-h']
+  sizing:         ['width', 'height', 'layoutItemMinW', 'layoutItemMaxW', 'layoutItemMinH', 'layoutItemMaxH']
 };
+
+// kebab-case → camelCase 変換（ユーザー入力の正規化用）
+storage._toCamelProp = (p) => p.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 // トークン検索（見つからなければ登録済み名を含むエラーを投げる）
 storage.findToken = (name) => {
@@ -109,7 +113,7 @@ storage.ensureTokenSet = async (name, opts) => {
     }
     return { set, created: false };
   }
-  catalog.addSet(name);
+  catalog.addSet({ name });
   await sleep(100);
   set = await storage.pollFind(() => storage.safeTokenSets([]).find(s => s.name === name));
   if (!set) throw new Error(`[ensureTokenSet] セット "${name}" の作成確認に失敗`);
@@ -139,13 +143,13 @@ storage.ensureToken = async (set, type, name, value, opts) => {
     }
     existing.remove();
     await sleep(50);
-    set.addToken(type, name, String(value));
+    set.addToken({ type, name, value: String(value) });
     await sleep(50);
     const updated = await storage.pollFind(() => set.tokens.find(t => t.name === name), { interval: 50 });
     if (!updated) throw new Error(`[ensureToken] トークン "${name}" の更新確認に失敗`);
     return { token: updated, action: 'updated' };
   }
-  set.addToken(type, name, String(value));
+  set.addToken({ type, name, value: String(value) });
   await sleep(50);
   const token = await storage.pollFind(() => set.tokens.find(t => t.name === name), { interval: 50 });
   if (!token) throw new Error(`[ensureToken] トークン "${name}" の作成確認に失敗`);
@@ -171,7 +175,26 @@ storage.ensureTokenBatch = async (set, tokens) => {
   return { results, errors };
 };
 
+// 入力プロパティの正規化＋検証（kebab/camel 両対応）
+// 戻り値: { normalized: string[] } or throws
+storage._normalizeTokenProps = (token, properties, fnName) => {
+  if (!properties || properties.length === 0) return { normalized: [] };
+  const normalized = properties.map(p => (p === 'all' ? p : storage._toCamelProp(p)));
+  const allowed = storage.TOKEN_PROPERTY_MAP[token.type];
+  if (allowed) {
+    const invalid = normalized.filter(p => p !== 'all' && !allowed.includes(p));
+    if (invalid.length > 0) {
+      throw new Error(
+        `[${fnName}] トークンタイプ "${token.type}" にプロパティ ${JSON.stringify(invalid)} は適用できません。` +
+        ` 許可されたプロパティ: ${allowed.join(', ')}`
+      );
+    }
+  }
+  return { normalized };
+};
+
 // 安全なトークン適用（単一シェイプ、async）
+// selection + applyToSelected を使用（shape.applyToken は未サポート）
 storage.applyTokenSafe = async (shape, tokenOrName, properties) => {
   if (!shape) {
     throw new Error('[applyTokenSafe] shape が null/undefined です。');
@@ -182,23 +205,19 @@ storage.applyTokenSafe = async (shape, tokenOrName, properties) => {
   if (!token) {
     throw new Error('[applyTokenSafe] token が null/undefined です。');
   }
-  if (properties && properties.length > 0) {
-    const allowed = storage.TOKEN_PROPERTY_MAP[token.type];
-    if (allowed) {
-      const invalid = properties.filter(p => p !== 'all' && !allowed.includes(p));
-      if (invalid.length > 0) {
-        throw new Error(
-          `[applyTokenSafe] トークンタイプ "${token.type}" にプロパティ ${JSON.stringify(invalid)} は適用できません。` +
-          ` 許可されたプロパティ: ${allowed.join(', ')}`
-        );
-      }
-    }
-  }
-  shape.applyToken(token, properties);
-  await sleep(100);
+  const { normalized } = storage._normalizeTokenProps(token, properties, 'applyTokenSafe');
+  const prev = penpot.selection;
+  penpot.selection = [shape];
+  await sleep(150);
+  // applyToSelected は Array 必須。空配列でもデフォルト prop が適用される
+  token.applyToSelected(normalized.length > 0 ? normalized : undefined);
+  await sleep(250);
+  penpot.selection = prev;
 };
 
-// 複数シェイプへの安全な一括適用（async）
+// 複数シェイプへの安全な適用（async）。
+// penpot.selection = shapes（複数一括指定）は stroke 系・異種要素混在で取りこぼしが発生するため、
+// シェイプ毎に selection を切り替えて applyToSelected を呼ぶ。
 storage.applyTokenToShapesSafe = async (tokenOrName, shapes, properties) => {
   if (!shapes || !Array.isArray(shapes) || shapes.length === 0) {
     throw new Error('[applyTokenToShapesSafe] shapes が空または無効です。');
@@ -209,20 +228,16 @@ storage.applyTokenToShapesSafe = async (tokenOrName, shapes, properties) => {
   if (!token) {
     throw new Error('[applyTokenToShapesSafe] token が null/undefined です。');
   }
-  if (properties && properties.length > 0) {
-    const allowed = storage.TOKEN_PROPERTY_MAP[token.type];
-    if (allowed) {
-      const invalid = properties.filter(p => p !== 'all' && !allowed.includes(p));
-      if (invalid.length > 0) {
-        throw new Error(
-          `[applyTokenToShapesSafe] トークンタイプ "${token.type}" にプロパティ ${JSON.stringify(invalid)} は適用できません。` +
-          ` 許可されたプロパティ: ${allowed.join(', ')}`
-        );
-      }
-    }
+  const { normalized } = storage._normalizeTokenProps(token, properties, 'applyTokenToShapesSafe');
+  const prev = penpot.selection;
+  for (const shape of shapes) {
+    if (!shape) continue;
+    penpot.selection = [shape];
+    await sleep(100);
+    token.applyToSelected(normalized.length > 0 ? normalized : undefined);
+    await sleep(150);
   }
-  token.applyToShapes(shapes, properties);
-  await sleep(100);
+  penpot.selection = prev;
 };
 
 /**
@@ -236,7 +251,7 @@ storage.ensureTheme = async (group, name, sets) => {
   let theme = themes ? themes.find(t => t.name === name) : null;
   let created = false;
   if (!theme) {
-    catalog.addTheme(group, name);
+    catalog.addTheme({ group, name });
     await sleep(100);
     theme = await storage.pollFind(() => storage.safeTokenThemes([]).find(t => t.name === name));
     if (!theme) {
@@ -363,7 +378,7 @@ storage.__wrappers.push(
   { fn: 'await storage.ensureToken(set, type, name, value)', replaces: 'set.addToken()', reason: '冪等トークン作成/更新' },
   { fn: 'await storage.ensureTokenBatch(set, tokens[])', replaces: null, reason: '一括トークン登録（10件バッチ+sleep）' },
   { fn: 'await storage.applyTokenSafe(shape, name, props[])', replaces: 'shape.applyToken()', reason: '型チェック+null安全+sleep' },
-  { fn: 'await storage.applyTokenToShapesSafe(name, shapes[], props[])', replaces: 'token.applyToShapes()', reason: '一括適用' },
+  { fn: 'await storage.applyTokenToShapesSafe(name, shapes[], props[])', replaces: 'token.applyToShapes()', reason: '個別ループ適用（信頼性優先）。大量時は件数×約250ms の時間を想定' },
   { fn: 'storage.findToken(name) / findTokenOrNull(name)', replaces: 'penpotUtils.findTokenByName()', reason: 'エラーヒント付き検索' },
   { fn: 'storage.ensureTheme(group, name, sets[])', replaces: 'catalog.addTheme()+find()+addSet()', reason: '冪等テーマ作成+セット関連付け（addSet はセッション限定）' },
   { fn: 'await storage.ensureSemanticTokens(opts?)', replaces: null, reason: 'デフォルト14色+spacing+borderRadius一括登録（force/overrides/includeTypography）' },

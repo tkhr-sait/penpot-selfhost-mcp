@@ -43,7 +43,7 @@ board.resize(1440, 900);
 board.addFlexLayout();
 board.flex.dir = 'row';
 board.flex.columnGap = 24;
-board.flex.padding = { top: 24, right: 24, bottom: 24, left: 24 };
+board.flex.verticalPadding = 24; board.flex.horizontalPadding = 24;
 
 return { pageId: page.id, boardId: board.id };
 ```
@@ -70,7 +70,7 @@ for (const name of columnNames) {
   col.addFlexLayout();
   col.flex.dir = 'column';
   col.flex.rowGap = 12;
-  col.flex.padding = { top: 16, right: 16, bottom: 16, left: 16 };
+  col.flex.verticalPadding = 16; col.flex.horizontalPadding = 16;
 
   const lc = await storage.appendChild(mainBoard, col);
   lc.horizontalSizing = 'fill';
@@ -90,6 +90,8 @@ return columns;
 
 **やりたいこと**: カード内にタイトルと優先度バッジを配置する。
 
+> Step 3 のコード中でハードコード色（`#FFFFFF`）を仮置きしている。Step 4 でセマンティックトークンに置換するため、この段階のハードコードは学習用の仮状態として扱う（完成デザインではトークン適用が必須）。
+
 ```javascript
 // ヘルパー関数を storage に登録して再利用
 storage.createCard = async (parent, title, priority) => {
@@ -99,9 +101,9 @@ storage.createCard = async (parent, title, priority) => {
   card.addFlexLayout();
   card.flex.dir = 'column';
   card.flex.rowGap = 8;
-  card.flex.padding = { top: 12, right: 12, bottom: 12, left: 12 };
+  card.flex.verticalPadding = 12; card.flex.horizontalPadding = 12;
   card.borderRadius = 8;
-  card.fills = [{ fillColor: '#FFFFFF', fillOpacity: 1 }];
+  card.fills = [{ fillColor: '#FFFFFF', fillOpacity: 1 }]; // Step 4 で surface-card トークンに置換
 
   const titleText = storage.createText(title, { fontSize: 16, fontWeight: 'semibold', growType: 'auto-width' });
   const badge = storage.createText(priority, { fontSize: 12, fontWeight: 'bold' });
@@ -131,7 +133,7 @@ const overview = penpotUtils.tokenOverview();
 
 await storage.applyTokenSafe(card, 'surface-card', ['fill']);
 await storage.applyTokenSafe(headerText, 'text-heading', ['fill']);
-await storage.applyTokenSafe(card, 'border-light', ['stroke-color']);
+await storage.applyTokenSafe(card, 'border-light', ['strokeColor']);
 
 return { applied: true };
 ```
@@ -163,7 +165,8 @@ return { interaction: 'navigate-to', target: detailBoard.id };
 
 **注意点**:
 - **同一ページ内のボード間のみ有効**（異なるページ間は動作しない）
-- OpenOverlay / ToggleOverlay は Plugin API 未実装 → `navigate-to` で代替
+- `addInteraction` で保存される action: `navigate-to` / `close-overlay` / `previous-screen` / `open-url`
+- 保存されない action: `open-overlay` / `toggle-overlay`（`navigate-to` で代替）
 
 ---
 
@@ -183,7 +186,7 @@ return { themeApplied: 'Dark', boardId: board.id };
 Light に戻す: `await storage.switchThemePersistent(['Shared', 'Light'], ['Dark'])`
 
 **注意点**:
-- `set.active = bool` はセッション限定（リロードで失われる）
+- `set.active = bool` / `set.toggleActive()` はセッションスコープ（ファイル再オープンで失われる）
 - 永続化は必ず `storage.switchThemePersistent()` を使う
 - 個別セット切替: `await storage.toggleSetPersistent('Dark', true)`
 

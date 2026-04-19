@@ -166,7 +166,7 @@ Penpot MCP (`execute_code`) を使ってデザインを作成する。
 await storage.applyTokenSafe(shape, 'accent-blue', ['fill']);
 
 // ストロークに適用
-await storage.applyTokenSafe(shape, 'accent-blue', ['stroke-color']);
+await storage.applyTokenSafe(shape, 'accent-blue', ['strokeColor']);
 
 // 複数シェイプに一括適用
 await storage.applyTokenToShapesSafe('accent-blue', [shape1, shape2], ['fill']);

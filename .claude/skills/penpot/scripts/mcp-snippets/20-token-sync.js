@@ -213,7 +213,7 @@ const _prepareSets = async (dtcg, stats) => {
     // Get or create token set
     let tokenSet = existingSets[setName];
     if (!tokenSet) {
-      catalog.addSet(setName);
+      catalog.addSet({ name: setName });
       await sleep(IMPORT_SET_OP_SLEEP_MS);
       // addSet() 戻り値のプロパティ即時読取不可 → safeTokenSets から再取得
       tokenSet = storage.safeTokenSets([]).find(s => s.name === setName);
@@ -269,13 +269,13 @@ const _processTokenBatches = async (allBatchItems, existingSets, existingTokensB
           // value は読み取り専用 → remove + addToken で更新
           existing.remove();
           await sleep(IMPORT_TOKEN_OP_SLEEP_MS);
-          tokenSet.addToken(penpotType, t.name, t.value);
+          tokenSet.addToken({ type: penpotType, name: t.name, value: t.value });
           tokenMap[t.name] = true; // マーカー更新
           await sleep(IMPORT_TOKEN_OP_SLEEP_MS);
           stats.tokensUpdated++;
         }
       } else {
-        tokenSet.addToken(penpotType, t.name, t.value);
+        tokenSet.addToken({ type: penpotType, name: t.name, value: t.value });
         // マップに追加して同バッチ内の重複作成を防止
         tokenMap[t.name] = true;
         await sleep(IMPORT_TOKEN_OP_SLEEP_MS);

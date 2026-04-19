@@ -52,6 +52,6 @@ return { darkTheme: darkTheme.name, lightTheme: lightTheme.name };
 
 ## 注意点
 
-- `ensureTheme` の `addSet` はセッション限定 — 永続化は `switchThemePersistent` で行う
+- `ensureTheme` の `addSet` はセッションスコープ — 永続化は `switchThemePersistent` で行う
 - セット作成順序が重要: Shared を先に作成し、テーマ固有セットを後に（カタログ順で後が優先）
 - テーマ切替パターン → [mcp-api.md #テーマ切替](../core/mcp-api.md#テーマ切替セットの-active-制御)

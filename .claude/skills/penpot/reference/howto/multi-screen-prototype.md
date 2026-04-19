@@ -52,7 +52,7 @@ if (!storage.__protoHelpers) {
     card.addFlexLayout();
     card.flex.dir = 'column';
     card.flex.rowGap = 8;
-    card.flex.padding = { top: 0, right: 0, bottom: 16, left: 0 };
+    card.flex.bottomPadding = 16;
     card.borderRadius = 12;
 
     // 画像プレースホルダ
